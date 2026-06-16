@@ -28,7 +28,7 @@ st.set_page_config(
     page_title="버핏 봇 · 장기 가치투자 스크리너",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -260,71 +260,72 @@ def ticker_sector_map() -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# 사이드바 — 입력
+# 메인 설정 패널 (사이드바 대신 — 접기/펼치기 가능)
 # ─────────────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### 📈 버핏 봇")
-    st.caption("워런 버핏식 장기 가치투자 스크리너")
-    st.divider()
+import re
 
-    mode = st.radio("분석 모드", ["유니버스 스크리닝", "직접 종목 입력"])
-    if mode == "유니버스 스크리닝":
-        market = st.selectbox("마켓", ["국장 (KR)", "미장 (US)", "전체 (All)"])
-        market_code = {"국장 (KR)": "kr", "미장 (US)": "us", "전체 (All)": "all"}[market]
-        custom_tickers = []
-    else:
+with st.expander("⚙️ 분석 설정  (클릭해서 열기 / 닫기)", expanded=st.session_state.get("panel_open", True)):
+    st.session_state["panel_open"] = True  # expander가 열려 있는 동안 유지
+
+    col_mode, col_market = st.columns([1, 1])
+    with col_mode:
+        mode = st.radio("분석 모드", ["유니버스 스크리닝", "직접 종목 입력"], horizontal=True)
+    with col_market:
+        if mode == "유니버스 스크리닝":
+            market = st.selectbox("마켓", ["국장 (KR)", "미장 (US)", "전체 (All)"])
+            market_code = {"국장 (KR)": "kr", "미장 (US)": "us", "전체 (All)": "all"}[market]
+            custom_tickers = []
+        else:
+            market_code = "custom"
+
+    if mode == "직접 종목 입력":
         from search_db import search as stock_search
 
-        search_q = st.text_input(
-            "🔎 회사 이름으로 검색",
-            placeholder="예: 삼성, 애플, 현대, Tesla...",
-            key="search_q",
-        )
-
-        # 검색 결과 → 선택
-        if search_q:
-            hits = stock_search(search_q, max_results=12)
-            if hits:
-                chosen = st.multiselect(
-                    "검색 결과 (선택하면 분석 목록에 추가)",
-                    options=[h["display"] for h in hits],
-                    default=st.session_state.get("chosen_display", []),
-                    key="chosen_display",
-                    help="시총 큰 종목이 위에 표시됩니다",
-                )
+        col_s1, col_s2 = st.columns([1, 2])
+        with col_s1:
+            search_q = st.text_input(
+                "🔎 회사 이름으로 검색",
+                placeholder="예: 삼성, 애플, 현대, Tesla...",
+                key="search_q",
+            )
+        with col_s2:
+            if search_q:
+                hits = stock_search(search_q, max_results=12)
+                if hits:
+                    chosen = st.multiselect(
+                        "검색 결과 (선택하면 분석 목록에 추가)",
+                        options=[h["display"] for h in hits],
+                        default=st.session_state.get("chosen_display", []),
+                        key="chosen_display",
+                        help="시총 큰 종목이 위에 표시됩니다",
+                    )
+                else:
+                    st.caption("검색 결과 없음 — 다른 이름으로 시도해보세요.")
+                    chosen = st.session_state.get("chosen_display", [])
             else:
-                st.caption("검색 결과 없음 — 다른 이름으로 시도해보세요.")
                 chosen = st.session_state.get("chosen_display", [])
-        else:
-            chosen = st.session_state.get("chosen_display", [])
 
-        # display 문자열에서 티커 추출: "삼성전자 (005930.KS)" → "005930.KS"
-        import re
         custom_tickers = []
         for d in (chosen or []):
             m = re.search(r'\(([^)]+)\)$', d)
             if m:
                 custom_tickers.append(m.group(1))
-
         if custom_tickers:
             st.caption(f"분석 목록: **{', '.join(custom_tickers)}**")
-        market_code = "custom"
 
-    st.divider()
-    top_n = st.slider("상세 조언 상위 종목 수", 3, 20, 8)
-    use_cache = st.toggle("당일 캐시 사용 (빠름)", value=True)
-    fetch_tech = st.toggle("기술변곡점 뉴스 분석", value=True)
+    col_opt1, col_opt2, col_opt3 = st.columns([2, 1, 1])
+    with col_opt1:
+        top_n = st.slider("상세 조언 상위 종목 수", 3, 20, 8)
+    with col_opt2:
+        use_cache = st.toggle("당일 캐시 사용", value=True)
+        fetch_tech = st.toggle("기술변곡점 뉴스", value=True)
+    with col_opt3:
+        run_btn = st.button("🔍 분석 시작", type="primary", use_container_width=True)
+        c1, c2 = st.columns(2)
+        watch_btn = c1.button("💾 저장", use_container_width=True)
+        check_btn = c2.button("🔔 점검", use_container_width=True)
 
-    st.divider()
-    run_btn = st.button("🔍 분석 시작", type="primary", use_container_width=True)
-
-    st.caption("📌 워치리스트")
-    c1, c2 = st.columns(2)
-    watch_btn = c1.button("💾 저장", use_container_width=True)
-    check_btn = c2.button("🔔 점검", use_container_width=True)
-
-    st.divider()
-    st.caption("⚠️ 교육·연구용 참고 도구. 투자 책임은 본인에게 있습니다.")
+st.caption("⚠️ 교육·연구용 참고 도구. 투자 책임은 본인에게 있습니다.")
 
 
 # ─────────────────────────────────────────────────────────────────────────
