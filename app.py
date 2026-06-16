@@ -354,18 +354,43 @@ if check_btn:
 def run_analysis(tickers: list[str], use_cache: bool, fetch_tech: bool):
     from buffett import evaluate
     from datafetch import fetch
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    bar = st.progress(0.0, text="데이터 수집 준비 중…")
+    total = len(tickers)
+    bar = st.progress(0.0, text=f"병렬 데이터 수집 중… (0/{total})")
+    status = st.empty()
+
     funds = []
-    for i, tk in enumerate(tickers):
-        bar.progress((i + 1) / len(tickers), text=f"수집 중 · {tk}  ({i+1}/{len(tickers)})")
-        f = fetch(tk, use_cache=use_cache)
-        if f:
-            funds.append(f)
+    done_count = 0
+    lock_funds = []
+
+    # 캐시 없을 때 yfinance rate-limit 고려해 최대 12 스레드
+    workers = min(12, total)
+
+    def _fetch_one(tk):
+        return fetch(tk, use_cache=use_cache)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_fetch_one, tk): tk for tk in tickers}
+        for fut in as_completed(futures):
+            done_count += 1
+            tk = futures[fut]
+            try:
+                f = fut.result()
+                if f:
+                    lock_funds.append(f)
+            except Exception:
+                pass
+            bar.progress(done_count / total,
+                         text=f"수집 중… ({done_count}/{total})  ·  {tk}")
+
     bar.progress(1.0, text="버핏 점수 계산 중…")
-    verdicts = sorted((evaluate(f, fetch_tech=fetch_tech) for f in funds),
-                      key=lambda v: v.total, reverse=True)
+    verdicts = sorted(
+        (evaluate(f, fetch_tech=fetch_tech) for f in lock_funds),
+        key=lambda v: v.total, reverse=True,
+    )
     bar.empty()
+    status.empty()
     return verdicts
 
 
