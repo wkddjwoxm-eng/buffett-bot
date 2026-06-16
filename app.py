@@ -106,10 +106,10 @@ st.markdown("""
     background-clip:text; -webkit-text-fill-color:transparent;}
 .pick-score span {font-size:.95rem; color:#7c8696; -webkit-text-fill-color:#7c8696;}
 .pick-stars {margin-left:auto; color:#ffce4d; font-size:1.05rem; letter-spacing:1px;}
-.pick-grid {display:flex; gap:8px; margin-top:14px;}
-.pick-grid > div {flex:1; background:rgba(0,0,0,.22); border-radius:11px; padding:9px 10px;}
-.pick-grid label {display:block; font-size:.68rem; color:#7c8696; margin-bottom:3px;}
-.pick-grid b {font-size:.96rem; color:#e2e8f0;}
+.pick-grid {display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px;}
+.pick-grid > div {background:rgba(0,0,0,.22); border-radius:11px; padding:9px 10px; min-width:0; overflow:hidden;}
+.pick-grid label {display:block; font-size:.68rem; color:#7c8696; margin-bottom:3px; white-space:nowrap;}
+.pick-grid b {font-size:.9rem; color:#e2e8f0; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .pos {color:#34f5a0 !important;} .neg {color:#ff7a7a !important;}
 
 /* ── 지표(st.metric) 카드화 ─────────────────────────── */
@@ -186,6 +186,67 @@ def pick_card_html(v, rank: int, sec_map: dict, stars: str) -> str:
   </div>
 </div>
 """
+
+
+def _render_detail(v):
+    """종목 상세 조언 블록 (스포트라이트 카드 클릭 + Tab4에서 공용)."""
+    from advisor import _one_liner
+    f, m, val = v.f, v.metrics, v.valuation
+    cur = f.currency
+    tech = getattr(m, "tech", None)
+    fmt = lambda x: money(x, cur)
+
+    with st.container(border=True):
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("총점", f"{v.total:.0f} / 100")
+        c1.metric("확신도", advisor.conviction_stars(v))
+        c2.metric("ROE", f"{f.roe*100:.1f}%" if f.roe else "—")
+        c2.metric("ROIC", f"{m.roic*100:.1f}%" if m.roic else "—")
+        c3.metric("현재가", fmt(f.price))
+        c3.metric("적정가치", fmt(val.get("fair")))
+        mos = val.get("mos_pct")
+        er = val.get("exp_return")
+        c4.metric("안전마진", f"{mos*100:+.0f}%" if mos is not None else "—",
+                  delta=("싸다" if (mos or 0) > 0 else "비싸다"),
+                  delta_color="normal" if (mos or 0) > 0 else "inverse")
+        c4.metric("기대 연수익률", f"{er*100:.0f}%" if er is not None else "—")
+
+        sc = val.get("scenarios", {})
+        if sc:
+            st.divider()
+            d1, d2, d3 = st.columns(3)
+            d1.metric("🐻 약세", fmt(sc.get("bear")))
+            d2.metric("📊 기본", fmt(sc.get("base")))
+            d3.metric("🐂 강세", fmt(sc.get("bull")))
+            st.caption(f"💰 매수 권장가 **{fmt(val.get('buy_below'))}** 이하 (안전마진 25%)")
+
+        ig = val.get("implied_growth")
+        real = f.earnings_cagr
+        if ig is not None:
+            if real is not None and ig <= real:
+                st.success(f"📈 역DCF: 시장은 연 {ig*100:.0f}% 성장 가정 — 실제({real*100:.0f}%)보다 낮아 **저평가 신호**")
+            elif real is not None:
+                st.warning(f"📈 역DCF: 시장은 연 {ig*100:.0f}% 기대 — 실적({real*100:.0f}%)이 못 따라가면 하락 위험")
+            else:
+                st.info(f"📈 역DCF: 시장이 가정한 성장률 연 {ig*100:.0f}%")
+
+        if tech and tech.news_count > 0:
+            st.divider()
+            t1, t2 = st.columns([1, 2])
+            lc = "🟢" if "긍정" in tech.label else ("🔴" if "부정" in tech.label else "⚪")
+            t1.markdown(f"**📡 기술·사업 신호**  \n{lc} **{tech.label}**")
+            t1.caption(f"뉴스 {tech.news_count}건 스캔")
+            if tech.positive_hits:
+                t2.markdown("**✅ 긍정:** " + " · ".join(tech.positive_hits))
+            if tech.negative_hits:
+                t2.markdown("**⚠️ 부정:** " + " · ".join(tech.negative_hits))
+
+        if v.flags:
+            st.error("⚑ 위험: " + "  /  ".join(v.flags))
+        if m.fscore is not None:
+            passed = [d[2:] for d in m.fscore_detail if d.startswith("✓")]
+            st.caption(f"📊 F-Score {m.fscore}/9 통과: " + (", ".join(passed) if passed else "없음"))
+        st.info(f"👉 {_one_liner(v)}")
 
 
 def ticker_sector_map() -> dict:
@@ -386,6 +447,17 @@ if spotlight:
         with col:
             st.markdown(pick_card_html(v, i, sec_map, advisor.conviction_stars(v)),
                         unsafe_allow_html=True)
+            key = f"spot_detail_{v.f.ticker}"
+            is_open = st.session_state.get(key, False)
+            btn_label = "▲ 상세 조언 닫기" if is_open else "📋 상세 조언 보기"
+            if st.button(btn_label, key=f"btn_{v.f.ticker}", use_container_width=True):
+                st.session_state[key] = not is_open
+                st.rerun()
+
+    # 상세 조언 패널 (카드 아래 전체 너비로 표시)
+    for v in spot:
+        if st.session_state.get(f"spot_detail_{v.f.ticker}"):
+            _render_detail(v)
 else:
     st.markdown('<div class="section-title">⏳ 지금은 매수 신호 없음</div>', unsafe_allow_html=True)
     st.info("안전마진을 주는 종목이 없습니다. 버핏: *기다림도 전략이다.* "
@@ -537,70 +609,14 @@ with tab3:
 
 # Tab4: 상세
 with tab4:
-    from advisor import _one_liner
     st.markdown(f'<div class="section-sub">상위 {min(top_n, len(verdicts))}개 종목 심층 분석</div>',
                 unsafe_allow_html=True)
     show = verdicts[:top_n]
     for idx, v in enumerate(show):
-        f, m, val = v.f, v.metrics, v.valuation
-        cur = f.currency
-        tech = getattr(m, "tech", None)
         _, emoji, short = rating_meta(v.rating)
-        with st.expander(f"{emoji} {f.name} ({f.ticker})  ·  {short}  ·  {v.total:.0f}점",
+        with st.expander(f"{emoji} {v.f.name} ({v.f.ticker})  ·  {short}  ·  {v.total:.0f}점",
                          expanded=(idx == 0)):
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("총점", f"{v.total:.0f} / 100")
-            c1.metric("확신도", advisor.conviction_stars(v))
-            c2.metric("ROE", f"{f.roe*100:.1f}%" if f.roe else "—")
-            c2.metric("ROIC", f"{m.roic*100:.1f}%" if m.roic else "—")
-            fmt = lambda x: money(x, cur)
-            c3.metric("현재가", fmt(f.price))
-            c3.metric("적정가치", fmt(val.get("fair")))
-            mos = val.get("mos_pct")
-            er = val.get("exp_return")
-            c4.metric("안전마진", f"{mos*100:+.0f}%" if mos is not None else "—",
-                      delta=("싸다" if (mos or 0) > 0 else "비싸다"),
-                      delta_color="normal" if (mos or 0) > 0 else "inverse")
-            c4.metric("기대 연수익률", f"{er*100:.0f}%" if er is not None else "—")
-
-            sc = val.get("scenarios", {})
-            if sc:
-                st.divider()
-                d1, d2, d3 = st.columns(3)
-                d1.metric("🐻 약세 시나리오", fmt(sc.get("bear")))
-                d2.metric("📊 기본 시나리오", fmt(sc.get("base")))
-                d3.metric("🐂 강세 시나리오", fmt(sc.get("bull")))
-                st.caption(f"💰 매수 권장가 **{fmt(val.get('buy_below'))}** 이하 (안전마진 25% 적용)")
-
-            ig = val.get("implied_growth")
-            real = f.earnings_cagr
-            if ig is not None:
-                if real is not None and ig <= real:
-                    st.success(f"📈 역DCF: 시장은 연 {ig*100:.0f}% 성장만 가정 — "
-                               f"실제 성장({real*100:.0f}%)보다 보수적이라 **저평가 신호**")
-                elif real is not None:
-                    st.warning(f"📈 역DCF: 시장은 연 {ig*100:.0f}% 성장 기대 — "
-                               f"실적({real*100:.0f}%)이 못 따라가면 하락 위험")
-                else:
-                    st.info(f"📈 역DCF: 시장이 가정한 성장률 연 {ig*100:.0f}%")
-
-            if tech and tech.news_count > 0:
-                st.divider()
-                t1, t2 = st.columns([1, 2])
-                lc = "🟢" if "긍정" in tech.label else ("🔴" if "부정" in tech.label else "⚪")
-                t1.markdown(f"**📡 기술·사업 신호**  \n{lc} **{tech.label}**")
-                t1.caption(f"뉴스 {tech.news_count}건 스캔")
-                if tech.positive_hits:
-                    t2.markdown("**✅ 긍정:** " + " · ".join(tech.positive_hits))
-                if tech.negative_hits:
-                    t2.markdown("**⚠️ 부정:** " + " · ".join(tech.negative_hits))
-
-            if v.flags:
-                st.error("⚑ 위험: " + "  /  ".join(v.flags))
-            if m.fscore is not None:
-                passed = [d[2:] for d in m.fscore_detail if d.startswith("✓")]
-                st.caption(f"📊 F-Score {m.fscore}/9 통과: " + (", ".join(passed) if passed else "없음"))
-            st.info(f"👉 {_one_liner(v)}")
+            _render_detail(v)
 
 st.divider()
 st.caption("⚠️ 교육·연구용 참고 도구입니다. 자동매매가 아니며, 실제 매수 전 사업보고서·해자의 지속성·"
