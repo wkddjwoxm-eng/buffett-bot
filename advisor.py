@@ -265,7 +265,7 @@ def advise(v: Verdict) -> list[str]:
 
 
 def _one_liner(v: Verdict) -> str:
-    f, m, val = v.f, v.valuation, v.metrics
+    f, m, val = v.f, v.metrics, v.valuation
     cur = f.currency
     buy = val.get("buy_below")
     per = m.norm_per if m.norm_per is not None else f.per
