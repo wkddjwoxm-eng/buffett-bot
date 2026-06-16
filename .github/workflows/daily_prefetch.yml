@@ -1,9 +1,11 @@
-name: 매일 오전 8시 종목 캐시 수집
+name: 하루 2회 종목 캐시 수집 (오전 8시·오후 8시 KST)
 
 on:
   schedule:
     # 매일 23:00 UTC = 한국시간 오전 8:00 KST
     - cron: "0 23 * * *"
+    # 매일 11:00 UTC = 한국시간 오후 8:00 KST
+    - cron: "0 11 * * *"
   workflow_dispatch:  # 수동 실행 버튼도 활성화
 
 jobs:
@@ -29,6 +31,8 @@ jobs:
         run: mkdir -p cache
 
       - name: 전체 종목 데이터 사전 수집
+        env:
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
         run: python prefetch.py
 
       - name: 캐시 파일 커밋 & 푸시
