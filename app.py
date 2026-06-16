@@ -156,7 +156,7 @@ def badge_html(rating: str) -> str:
     return f'<span class="badge {cls}">{emoji} {short}</span>'
 
 
-def pick_card_html(v, rank: int, sec_map: dict, stars: str) -> str:
+def pick_card_html(v, rank: int, sec_map: dict, stars: str, display_name: str = "") -> str:
     f, val = v.f, v.valuation
     cls, emoji, short = rating_meta(v.rating)
     cur = f.currency
@@ -166,13 +166,14 @@ def pick_card_html(v, rank: int, sec_map: dict, stars: str) -> str:
     mos_txt = f"{mos*100:+.0f}%" if mos is not None else "—"
     er = val.get("exp_return")
     er_txt = f"{er*100:.0f}%" if er is not None else "—"
+    name_txt = (display_name or f.name)[:20]
     return f"""
 <div class="pick-card {cls}">
   <div class="pick-head">
     <span class="pick-rank">#{rank}</span>
     <span class="badge {cls}">{emoji} {short}</span>
   </div>
-  <div class="pick-name">{f.name[:20]}</div>
+  <div class="pick-name">{name_txt}</div>
   <div class="pick-sub">{f.ticker} · {sec}</div>
   <div class="pick-score-row">
     <div class="pick-score">{v.total:.0f}<span>/100</span></div>
@@ -256,6 +257,26 @@ def ticker_sector_map() -> dict:
         for sector, items in uni.items():
             for tk, _ in items:
                 m[tk] = sector
+    return m
+
+
+def ticker_name_map() -> dict:
+    """ticker → 한글(또는 표시용) 이름 맵. universe + search_db 통합."""
+    m = {}
+    # universe (한글명 우선)
+    from universe import KR_UNIVERSE, US_UNIVERSE
+    for uni in (KR_UNIVERSE, US_UNIVERSE):
+        for sector, items in uni.items():
+            for tk, name in items:
+                m[tk] = name
+    # search_db 보완
+    try:
+        from search_db import ALL_STOCKS
+        for kor, eng, tk, _ in ALL_STOCKS:
+            if tk not in m:
+                m[tk] = kor if kor else eng
+    except Exception:
+        pass
     return m
 
 
@@ -408,6 +429,7 @@ if run_btn:
 
     st.session_state["verdicts"] = run_analysis(tickers, use_cache, fetch_tech)
     st.session_state["sec_map"] = ticker_sector_map()
+    st.session_state["name_map"] = ticker_name_map()
     st.session_state["analyzed"] = True
 
 
@@ -453,6 +475,12 @@ import advisor
 
 verdicts = st.session_state["verdicts"]
 sec_map = st.session_state["sec_map"]
+name_map = st.session_state.get("name_map", {})
+
+
+def disp_name(v) -> str:
+    """티커에 맞는 한글(표시용) 이름 반환. 없으면 yfinance 이름 그대로."""
+    return name_map.get(v.f.ticker) or v.f.name
 
 if not verdicts:
     st.error("수집된 종목이 없습니다. 네트워크나 티커를 확인하세요.")
@@ -500,7 +528,8 @@ if spotlight:
     cols = st.columns(len(spot))
     for i, (col, v) in enumerate(zip(cols, spot), 1):
         with col:
-            st.markdown(pick_card_html(v, i, sec_map, advisor.conviction_stars(v)),
+            st.markdown(pick_card_html(v, i, sec_map, advisor.conviction_stars(v),
+                                       display_name=disp_name(v)),
                         unsafe_allow_html=True)
             key = f"spot_detail_{v.f.ticker}"
             is_open = st.session_state.get(key, False)
@@ -536,7 +565,7 @@ with tab1:
         er = v.valuation.get("exp_return")
         rows.append({
             "#": i,
-            "종목": f.name[:18],
+            "종목": disp_name(v)[:18],
             "섹터": sec_map.get(f.ticker, f.sector)[:10],
             "총점": round(v.total, 1),
             "품질": round(v.quality, 1),
@@ -585,7 +614,7 @@ with tab2:
             "평균 품질": round(sum(x.quality for x in vs) / len(vs), 1),
             "평균 총점": round(sum(x.total for x in vs) / len(vs), 1),
             "종목수": len(vs),
-            "대표 종목": best.f.name[:16],
+            "대표 종목": disp_name(best)[:16],
             "투자 관점": SECTOR_PHILOSOPHY.get(sec, ""),
         })
     sec_rows.sort(key=lambda x: -x["평균 품질"])
@@ -610,7 +639,7 @@ with tab3:
             er = v.valuation.get("exp_return")
             er_s = f" · 기대수익 {er*100:.0f}%" if er is not None else ""
             cc = st.columns([3, 2, 2, 3])
-            cc[0].markdown(f"**{v.f.name[:16]}** {badge_html(v.rating)}", unsafe_allow_html=True)
+            cc[0].markdown(f"**{disp_name(v)[:16]}** {badge_html(v.rating)}", unsafe_allow_html=True)
             cc[1].markdown(f"`{sec}`")
             cc[2].markdown(f"{money(v.f.price, v.f.currency)} → {money(v.valuation.get('fair'), v.f.currency)}")
             cc[3].markdown(f"{advisor.conviction_stars(v)}{er_s}")
@@ -629,7 +658,7 @@ with tab3:
             else:
                 txt = "목표가 산정 불가"
             cc = st.columns([3, 4, 2])
-            cc[0].markdown(f"**{v.f.name[:16]}**")
+            cc[0].markdown(f"**{disp_name(v)[:16]}**")
             cc[1].markdown(f"{money(v.f.price, v.f.currency)} · {txt}")
             cc[2].markdown(f"품질 {v.quality:.0f}/75")
 
@@ -637,7 +666,7 @@ with tab3:
         st.markdown("#### 🚫 회피")
         for v in avoids[:6]:
             why = v.flags[0] if v.flags else "지표 기준 미달"
-            st.markdown(f"- **{v.f.name[:16]}** — {why}")
+            st.markdown(f"- **{disp_name(v)[:16]}** — {why}")
 
     # 섹터 분산
     if buys:
@@ -669,7 +698,7 @@ with tab4:
     show = verdicts[:top_n]
     for idx, v in enumerate(show):
         _, emoji, short = rating_meta(v.rating)
-        with st.expander(f"{emoji} {v.f.name} ({v.f.ticker})  ·  {short}  ·  {v.total:.0f}점",
+        with st.expander(f"{emoji} {disp_name(v)} ({v.f.ticker})  ·  {short}  ·  {v.total:.0f}점",
                          expanded=(idx == 0)):
             _render_detail(v)
 
