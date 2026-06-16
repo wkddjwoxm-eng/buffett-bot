@@ -211,8 +211,8 @@ with tab1:
         if "부정" in str(val): return "color: #ff8888"
         return ""
 
-    styled = df.style.applymap(color_rating, subset=["등급"]) \
-                     .applymap(color_tech, subset=["기술신호"]) \
+    styled = df.style.map(color_rating, subset=["등급"]) \
+                     .map(color_tech, subset=["기술신호"]) \
                      .background_gradient(subset=["총점"], cmap="RdYlGn", vmin=30, vmax=80)
 
     st.dataframe(styled, use_container_width=True, hide_index=True, height=600)
