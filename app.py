@@ -267,9 +267,10 @@ def _render_detail(v):
         # ── 주주환원·재무 고급 신호 ──
         extra_signals = []
         f_obj = v.f
-        if f_obj.insider_pct is not None and f_obj.insider_pct >= 0.05:
-            extra_signals.append(f"👤 내부자 지분 {f_obj.insider_pct*100:.1f}% — 경영진이 대주주")
-        if m.buyback_signal:
+        insider_pct = getattr(f_obj, 'insider_pct', None)
+        if insider_pct is not None and insider_pct >= 0.05:
+            extra_signals.append(f"👤 내부자 지분 {insider_pct*100:.1f}% — 경영진이 대주주")
+        if getattr(m, 'buyback_signal', False):
             extra_signals.append("🔄 자사주 매입 감지 — 발행주식수 감소 중")
         div_streak = getattr(f_obj, 'div_growth_streak', 0)
         if div_streak >= 5:
@@ -279,13 +280,15 @@ def _render_detail(v):
             extra_signals.append(f"📈 분기 EPS {eps_streak}회 연속 성장")
         if getattr(f_obj, 'de_improving', False):
             extra_signals.append("📉 부채비율 개선 추세")
-        if m.interest_coverage is not None:
-            if m.interest_coverage >= 10:
-                extra_signals.append(f"🛡️ 이자보상비율 {m.interest_coverage:.1f}배 — 재무 매우 안전")
-            elif m.interest_coverage < 3:
-                extra_signals.append(f"⚠️ 이자보상비율 {m.interest_coverage:.1f}배 — 이자 부담 주의")
-        if f_obj.institution_pct is not None:
-            extra_signals.append(f"🏦 기관 보유 {f_obj.institution_pct*100:.1f}%")
+        interest_cov = getattr(m, 'interest_coverage', None)
+        if interest_cov is not None:
+            if interest_cov >= 10:
+                extra_signals.append(f"🛡️ 이자보상비율 {interest_cov:.1f}배 — 재무 매우 안전")
+            elif interest_cov < 3:
+                extra_signals.append(f"⚠️ 이자보상비율 {interest_cov:.1f}배 — 이자 부담 주의")
+        institution_pct = getattr(f_obj, 'institution_pct', None)
+        if institution_pct is not None:
+            extra_signals.append(f"🏦 기관 보유 {institution_pct*100:.1f}%")
         if extra_signals:
             st.info("  |  ".join(extra_signals))
 
