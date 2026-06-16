@@ -173,8 +173,8 @@ def _normalize(ticker: str, info: dict, fin, bs, cf) -> Fundamentals:
     if not interest_expense_hist:
         interest_expense_hist = _row(fin, "Interest Expense")
     hist["interest_expense"] = interest_expense_hist
-    ebit_val = (hist["ebit"] or [None])[0]
-    int_exp = (interest_expense_hist or [None])[0]
+    ebit_val = next((v for v in (hist["ebit"] or []) if v is not None), None)
+    int_exp = next((v for v in (interest_expense_hist or []) if v is not None), None)
     if ebit_val and int_exp and int_exp != 0:
         interest_coverage = abs(ebit_val / int_exp)
     else:

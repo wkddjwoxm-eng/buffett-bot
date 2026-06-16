@@ -264,6 +264,23 @@ def _render_detail(v):
             if tech.negative_hits:
                 t2.markdown("**⚠️ 부정 키워드:** " + " · ".join(tech.negative_hits))
 
+        # ── 주주환원·재무 고급 신호 ──
+        extra_signals = []
+        f_obj = v.f
+        if f_obj.insider_pct is not None and f_obj.insider_pct >= 0.05:
+            extra_signals.append(f"👤 내부자 지분 {f_obj.insider_pct*100:.1f}% — 경영진이 대주주")
+        if m.buyback_signal:
+            extra_signals.append("🔄 자사주 매입 감지 — 발행주식수 감소 중")
+        if m.interest_coverage is not None:
+            if m.interest_coverage >= 10:
+                extra_signals.append(f"🛡️ 이자보상비율 {m.interest_coverage:.1f}배 — 재무 매우 안전")
+            elif m.interest_coverage < 3:
+                extra_signals.append(f"⚠️ 이자보상비율 {m.interest_coverage:.1f}배 — 이자 부담 주의")
+        if f_obj.institution_pct is not None:
+            extra_signals.append(f"🏦 기관 보유 {f_obj.institution_pct*100:.1f}%")
+        if extra_signals:
+            st.info("  |  ".join(extra_signals))
+
         # ── 위험·F스코어 ──
         if v.flags:
             st.error("⚑ 위험 요인: " + "  /  ".join(v.flags))
