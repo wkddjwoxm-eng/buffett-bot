@@ -56,6 +56,20 @@ class Fundamentals:
     # --- 주주환원 ---
     dividend_yield: Optional[float] = None   # 배당수익률 (소수)
 
+    # --- 주주환원 고급 ---
+    insider_pct: Optional[float] = None       # 내부자 지분율 (0.05 = 5%)
+    institution_pct: Optional[float] = None  # 기관 지분율
+    payout_ratio: Optional[float] = None     # 배당성향
+    shares_history: list[float] = field(default_factory=list)  # 발행주식수 다년 추이
+
+    # --- 재무 안정성 고급 ---
+    interest_coverage: Optional[float] = None  # 이자보상비율 = EBIT / 이자비용
+    roa: Optional[float] = None               # 총자산이익률
+
+    # --- 성장성 고급 ---
+    revenue_growth_recent: Optional[float] = None   # 최근 1년 매출성장
+    earnings_growth_recent: Optional[float] = None  # 최근 1년 이익성장
+
     # --- 밸류에이션 ---
     per: Optional[float] = None
     pbr: Optional[float] = None
@@ -70,6 +84,18 @@ class Fundamentals:
     hist: dict = field(default_factory=dict)
 
     note: str = ""                           # 데이터 품질 등 비고
+
+
+SECTOR_AVG_PER = {
+    "반도체·IT장비": 20, "인터넷·플랫폼·게임": 22, "2차전지·소재·화학": 18,
+    "자동차·부품·타이어": 12, "금융·보험·증권": 11, "필수소비재·식품·음료": 18,
+    "바이오·제약·헬스케어": 35, "지주·철강·소재": 10, "통신": 12,
+    "조선·방산·기계": 15, "항공·운수·물류": 15, "건설·부동산": 9,
+    "유통·소비재·서비스": 16, "에너지·유틸리티": 14,
+    "IT·반도체": 28, "커뮤니케이션": 22, "경기소비재": 20, "필수소비재": 20,
+    "헬스케어": 32, "금융": 14, "산업재": 22, "에너지": 13, "소재": 18,
+    "부동산": 45, "유틸리티": 22,
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -153,7 +179,22 @@ def score_profitability(f: Fundamentals, roic=None) -> tuple[float, list[str]]:
     s += gm_pts
     if f.gross_margin is not None:
         notes.append(f"매출총이익률 {f.gross_margin*100:.1f}% → {gm_pts:.1f}/4")
-    return min(s, 30.0), notes
+    # 내부자 지분율 보너스 (최대 +3)
+    bonus = 0.0
+    if f.insider_pct is not None:
+        if f.insider_pct >= 0.10:
+            bonus += 3
+            notes.append(f"내부자지분율 {f.insider_pct*100:.1f}% → +3 (경영진 대규모 투자)")
+        elif f.insider_pct >= 0.05:
+            bonus += 2
+            notes.append(f"내부자지분율 {f.insider_pct*100:.1f}% → +2")
+    # 자사주 매입(발행주식 감소) 보너스 +2
+    sh = f.shares_history
+    if len(sh) >= 3 and sh[0] is not None and sh[-1] is not None and sh[-1] > 0:
+        if sh[0] < sh[-1] * 0.97:  # 3% 이상 감소
+            bonus += 2
+            notes.append(f"발행주식 {(sh[0]/sh[-1]-1)*100:.1f}% 감소(자사주 매입) → +2")
+    return min(s + bonus, 30.0), notes
 
 
 def is_financial(f: Fundamentals) -> bool:
@@ -185,7 +226,19 @@ def score_strength(f: Fundamentals) -> tuple[float, list[str]]:
     s += fy_pts
     if f.fcf_yield is not None:
         notes.append(f"FCF수익률 {f.fcf_yield*100:.1f}% → {fy_pts:.0f}/8")
-    return min(s, 25.0), notes
+    # 이자보상비율 보너스 (최대 +3)
+    ic_bonus = 0.0
+    if f.interest_coverage is not None:
+        if f.interest_coverage >= 10:
+            ic_bonus = 3
+            notes.append(f"이자보상비율 {f.interest_coverage:.1f}배 → +3 (이자 부담 매우 낮음)")
+        elif f.interest_coverage >= 5:
+            ic_bonus = 2
+            notes.append(f"이자보상비율 {f.interest_coverage:.1f}배 → +2")
+        elif f.interest_coverage >= 3:
+            ic_bonus = 1
+            notes.append(f"이자보상비율 {f.interest_coverage:.1f}배 → +1")
+    return min(s + ic_bonus, 25.0), notes
 
 
 def score_growth(f: Fundamentals) -> tuple[float, list[str]]:
@@ -232,6 +285,20 @@ def score_valuation(f: Fundamentals, eff_per=None, cyclical=False) -> tuple[floa
     s += div_pts
     if f.dividend_yield:
         notes.append(f"배당수익률 {f.dividend_yield*100:.1f}% → {div_pts:.0f}/4")
+    # 섹터 상대 PER 보너스 (최대 +3)
+    sector_avg = None
+    sec = f.sector or ""
+    for k, v in SECTOR_AVG_PER.items():
+        if k == sec or any(kw in sec for kw in k.split("·")):
+            sector_avg = v
+            break
+    if use_per and use_per > 0 and sector_avg:
+        if use_per < sector_avg * 0.70:
+            s += 3
+            notes.append(f"PER {use_per:.1f} / 섹터평균 {sector_avg} → +3 (30% 저평가)")
+        elif use_per < sector_avg * 0.85:
+            s += 2
+            notes.append(f"PER {use_per:.1f} / 섹터평균 {sector_avg} → +2 (15% 저평가)")
     return min(s, 25.0), notes
 
 

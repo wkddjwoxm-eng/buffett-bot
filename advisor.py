@@ -184,6 +184,24 @@ def _metric_narrative(v: Verdict) -> list[str]:
     if f.dividend_yield and f.dividend_yield > 0.03:
         lines.append(f"배당수익률 {f.dividend_yield*100:.1f}% — 보유 중에도 안정적 현금흐름 수취 가능.")
 
+    # 내부자 지분율
+    if f.insider_pct is not None and f.insider_pct >= 0.10:
+        lines.append(f"내부자 지분율 {f.insider_pct*100:.1f}% — 경영진이 직접 대규모 투자. 주주와 이해관계 일치.")
+    elif f.insider_pct is not None and f.insider_pct >= 0.05:
+        lines.append(f"내부자 지분율 {f.insider_pct*100:.1f}% — 경영진의 적정 수준 투자로 이해관계 어느 정도 일치.")
+
+    # 자사주 매입
+    if getattr(m, "buyback_signal", False):
+        lines.append("최근 자사주 매입 감지 — 경영진이 주가를 저평가로 판단한 신호.")
+
+    # 이자보상비율
+    ic = getattr(m, "interest_coverage", None)
+    if ic is not None:
+        if ic >= 10:
+            lines.append(f"이자보상비율 {ic:.1f}배 — 이자 부담 매우 낮음. 금리 상승에도 안전.")
+        elif ic < 3:
+            lines.append(f"이자보상비율 {ic:.1f}배 — 이자 부담이 큼. 금리 상승 시 수익성 악화 위험.")
+
     return lines
 
 

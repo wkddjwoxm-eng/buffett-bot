@@ -221,6 +221,10 @@ class Metrics:
     fscore_detail: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
     tech: Optional[object] = None   # tech_signals.TechSignal
+    insider_signal: Optional[str] = None   # "강함" / "보통" / None
+    buyback_signal: bool = False           # 자사주 매입 감지
+    interest_coverage: Optional[float] = None
+    div_growth_streak: int = 0             # 연속 배당 성장 연수 (estimate)
 
 
 def compute(f: Fundamentals, fetch_tech: bool = True) -> Metrics:
@@ -228,6 +232,29 @@ def compute(f: Fundamentals, fetch_tech: bool = True) -> Metrics:
     norm = normalized(f)
     fs, fdetail = piotroski(f)
     tech = _TS.analyze(f.ticker) if fetch_tech else _TS.TechSignal()
+
+    # 내부자 신호
+    insider_signal = None
+    if f.insider_pct is not None:
+        if f.insider_pct >= 0.10:
+            insider_signal = "강함"
+        elif f.insider_pct >= 0.05:
+            insider_signal = "보통"
+
+    # 자사주 매입 감지 (발행주식 5% 이상 감소)
+    sh = f.shares_history
+    buyback_signal = False
+    if len(sh) >= 2 and sh[0] is not None and sh[-1] is not None and sh[-1] > 0:
+        buyback_signal = sh[0] < sh[-1] * 0.95
+
+    # 배당 성장 연수 추정
+    div_growth_streak = 0
+    ni_hist = _h(f, "net_income")
+    if f.dividend_yield and f.dividend_yield > 0 and len(ni_hist) >= 3:
+        pos = all(v is not None and v > 0 for v in ni_hist[:3])
+        if pos:
+            div_growth_streak = len([v for v in ni_hist if v is not None and v > 0])
+
     return Metrics(
         roic=roic(f),
         owner_earnings=oe,
@@ -240,4 +267,8 @@ def compute(f: Fundamentals, fetch_tech: bool = True) -> Metrics:
         fscore_detail=fdetail,
         flags=red_flags(f),
         tech=tech,
+        insider_signal=insider_signal,
+        buyback_signal=buyback_signal,
+        interest_coverage=f.interest_coverage,
+        div_growth_streak=div_growth_streak,
     )

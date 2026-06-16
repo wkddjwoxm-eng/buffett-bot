@@ -158,6 +158,40 @@ def _normalize(ticker: str, info: dict, fin, bs, cf) -> Fundamentals:
     div = _num(info.get("dividendYield"))
     div = div / 100 if div is not None else None
 
+    # 내부자/기관 지분율
+    insider_pct = _num(info.get("heldPercentInsiders"))
+    institution_pct = _num(info.get("heldPercentInstitutions"))
+
+    # 배당성향
+    payout_ratio = _num(info.get("payoutRatio"))
+
+    # 발행주식수 다년 추이
+    shares_history = [s for s in hist.get("shares_bs", []) if s is not None]
+
+    # 이자보상비율 = EBIT / 이자비용
+    interest_expense_hist = _row(cf, "Interest Expense", "Interest Expense Non Operating")
+    if not interest_expense_hist:
+        interest_expense_hist = _row(fin, "Interest Expense")
+    hist["interest_expense"] = interest_expense_hist
+    ebit_val = (hist["ebit"] or [None])[0]
+    int_exp = (interest_expense_hist or [None])[0]
+    if ebit_val and int_exp and int_exp != 0:
+        interest_coverage = abs(ebit_val / int_exp)
+    else:
+        interest_coverage = None
+
+    # ROA
+    roa_val = _num(info.get("returnOnAssets"))
+    if roa_val is None:
+        ni_v = (hist["net_income"] or [None])[0]
+        ta_v = (hist["total_assets"] or [None])[0]
+        if ni_v and ta_v and ta_v > 0:
+            roa_val = ni_v / ta_v
+
+    # 최근 1년 성장률
+    revenue_growth_recent = _num(info.get("revenueGrowth"))
+    earnings_growth_recent = _num(info.get("earningsGrowth")) or _num(info.get("earningsQuarterlyGrowth"))
+
     return Fundamentals(
         ticker=ticker,
         name=info.get("shortName") or info.get("longName") or ticker,
@@ -179,6 +213,14 @@ def _normalize(ticker: str, info: dict, fin, bs, cf) -> Fundamentals:
         fcf=fcf,
         fcf_yield=fcf_yield,
         dividend_yield=div,
+        insider_pct=insider_pct,
+        institution_pct=institution_pct,
+        payout_ratio=payout_ratio,
+        shares_history=shares_history,
+        interest_coverage=interest_coverage,
+        roa=roa_val,
+        revenue_growth_recent=revenue_growth_recent,
+        earnings_growth_recent=earnings_growth_recent,
         per=per,
         pbr=pbr,
         eps=eps,
@@ -191,7 +233,7 @@ def _normalize(ticker: str, info: dict, fin, bs, cf) -> Fundamentals:
 # ─────────────────────────────────────────────────────────────────────────
 # 캐시 직렬화
 # ─────────────────────────────────────────────────────────────────────────
-CACHE_VERSION = "v2"   # 스키마 변경 시 올리면 자동 재수집
+CACHE_VERSION = "v3"   # 스키마 변경 시 올리면 자동 재수집
 
 
 def _cache_path(ticker: str) -> Path:
