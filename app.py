@@ -529,10 +529,29 @@ elif buy_ratio < 0.35:
 else:
     temp = "🔥 우호적 국면<br><span style='font-size:.78rem;color:#8b95a5'>분산 매수 검토</span>"
 
+from pathlib import Path as _Path
+from datafetch import CACHE_DIR as _CACHE_DIR, CACHE_VERSION as _CV
+
+def _data_timestamp() -> str:
+    """캐시 파일 중 가장 최근 mtime을 KST로 반환."""
+    import os
+    files = list(_CACHE_DIR.glob(f"*_{_CV}_*.json"))
+    if not files:
+        from datetime import datetime
+        return datetime.now().strftime("%Y년 %m월 %d일 %H:%M") + " 기준 (실시간 수집)"
+    latest = max(files, key=lambda p: p.stat().st_mtime)
+    from datetime import datetime, timezone, timedelta
+    kst = timezone(timedelta(hours=9))
+    dt = datetime.fromtimestamp(latest.stat().st_mtime, tz=kst)
+    return dt.strftime("%Y년 %m월 %d일 %H:%M KST 기준")
+
+_ts = _data_timestamp()
+
 st.markdown(f"""
 <div class="hero">
   <h1>📊 분석 결과</h1>
   <p>{n}개 종목을 버핏 잣대로 채점했습니다. {'강력 매수 ' + str(len(strong)) + '종목 발견!' if strong else '오늘은 강력 매수 등급이 없습니다 — 정상입니다.'}</p>
+  <span class="tag">🕗 {_ts}</span>
 </div>
 <div class="kpi-row">
   <div class="kpi-card temp"><div class="num">{temp}</div><div class="lbl">시장 온도</div></div>
