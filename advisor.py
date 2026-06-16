@@ -202,6 +202,26 @@ def _metric_narrative(v: Verdict) -> list[str]:
         elif ic < 3:
             lines.append(f"이자보상비율 {ic:.1f}배 — 이자 부담이 큼. 금리 상승 시 수익성 악화 위험.")
 
+    # 배당 성장 연속성
+    div_streak = getattr(f, 'div_growth_streak', 0)
+    if div_streak >= 10:
+        lines.append(f"배당 {div_streak}년 연속 성장 — '배당 귀족' 수준. 버핏이 선호하는 주주환원 우선 기업.")
+    elif div_streak >= 5:
+        lines.append(f"배당 {div_streak}년 연속 성장 — 안정적인 주주환원 문화 정착.")
+    elif div_streak >= 3:
+        lines.append(f"배당 {div_streak}년 연속 성장 — 배당 성장 초기 진입.")
+
+    # EPS 연속 성장
+    eps_streak = getattr(f, 'eps_beat_streak', 0)
+    if eps_streak >= 4:
+        lines.append(f"분기 EPS {eps_streak}회 연속 성장 — 실적 모멘텀 강화 중.")
+    elif eps_streak >= 2:
+        lines.append(f"분기 EPS {eps_streak}회 연속 성장 — 최근 이익 회복세.")
+
+    # D/E 개선
+    if getattr(f, 'de_improving', False):
+        lines.append("부채비율 개선 추세 — 재무구조가 점진적으로 좋아지는 중.")
+
     return lines
 
 

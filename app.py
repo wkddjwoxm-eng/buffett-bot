@@ -271,6 +271,14 @@ def _render_detail(v):
             extra_signals.append(f"👤 내부자 지분 {f_obj.insider_pct*100:.1f}% — 경영진이 대주주")
         if m.buyback_signal:
             extra_signals.append("🔄 자사주 매입 감지 — 발행주식수 감소 중")
+        div_streak = getattr(f_obj, 'div_growth_streak', 0)
+        if div_streak >= 5:
+            extra_signals.append(f"💰 배당 {div_streak}년 연속 성장")
+        eps_streak = getattr(f_obj, 'eps_beat_streak', 0)
+        if eps_streak >= 3:
+            extra_signals.append(f"📈 분기 EPS {eps_streak}회 연속 성장")
+        if getattr(f_obj, 'de_improving', False):
+            extra_signals.append("📉 부채비율 개선 추세")
         if m.interest_coverage is not None:
             if m.interest_coverage >= 10:
                 extra_signals.append(f"🛡️ 이자보상비율 {m.interest_coverage:.1f}배 — 재무 매우 안전")

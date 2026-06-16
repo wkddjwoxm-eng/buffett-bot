@@ -83,6 +83,11 @@ class Fundamentals:
     #       total_debt, long_term_debt, cash, capex, dep_amort, change_in_wc
     hist: dict = field(default_factory=dict)
 
+    # --- 배당·EPS·부채 추세 ---
+    div_growth_streak: int = 0        # 연속 배당 성장 연수
+    eps_beat_streak: int = 0          # 분기 EPS 연속 성장
+    de_improving: bool = False        # D/E 개선 추세
+
     note: str = ""                           # 데이터 품질 등 비고
 
 
@@ -194,6 +199,14 @@ def score_profitability(f: Fundamentals, roic=None) -> tuple[float, list[str]]:
         if sh[0] < sh[-1] * 0.97:  # 3% 이상 감소
             bonus += 2
             notes.append(f"발행주식 {(sh[0]/sh[-1]-1)*100:.1f}% 감소(자사주 매입) → +2")
+    # EPS 연속 성장 보너스
+    eps_streak = getattr(f, 'eps_beat_streak', 0)
+    if eps_streak >= 4:
+        bonus += 2
+        notes.append(f"분기 EPS {eps_streak}회 연속 성장 → +2")
+    elif eps_streak >= 2:
+        bonus += 1
+        notes.append(f"분기 EPS {eps_streak}회 연속 성장 → +1")
     return min(s + bonus, 30.0), notes
 
 
@@ -238,6 +251,10 @@ def score_strength(f: Fundamentals) -> tuple[float, list[str]]:
         elif f.interest_coverage >= 3:
             ic_bonus = 1
             notes.append(f"이자보상비율 {f.interest_coverage:.1f}배 → +1")
+    # D/E 개선 추세 보너스
+    if getattr(f, 'de_improving', False):
+        ic_bonus = min(ic_bonus + 2, 5)
+        notes.append("D/E 개선 추세 → +2")
     return min(s + ic_bonus, 25.0), notes
 
 
@@ -299,6 +316,17 @@ def score_valuation(f: Fundamentals, eff_per=None, cyclical=False) -> tuple[floa
         elif use_per < sector_avg * 0.85:
             s += 2
             notes.append(f"PER {use_per:.1f} / 섹터평균 {sector_avg} → +2 (15% 저평가)")
+    # 배당 성장 연속성 보너스
+    div_streak = getattr(f, 'div_growth_streak', 0)
+    if div_streak >= 10:
+        s = min(s + 3, 25)
+        notes.append(f"배당 {div_streak}년 연속 성장 → +3 (배당 귀족)")
+    elif div_streak >= 5:
+        s = min(s + 2, 25)
+        notes.append(f"배당 {div_streak}년 연속 성장 → +2")
+    elif div_streak >= 3:
+        s = min(s + 1, 25)
+        notes.append(f"배당 {div_streak}년 연속 성장 → +1")
     return min(s, 25.0), notes
 
 

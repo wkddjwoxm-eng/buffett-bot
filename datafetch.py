@@ -70,7 +70,7 @@ def _cagr(series_new_to_old: list[Optional[float]]) -> Optional[float]:
 # ─────────────────────────────────────────────────────────────────────────
 # 단일 종목 정규화
 # ─────────────────────────────────────────────────────────────────────────
-def _normalize(ticker: str, info: dict, fin, bs, cf) -> Fundamentals:
+def _normalize(ticker: str, info: dict, fin, bs, cf, tk=None) -> Fundamentals:
     is_kr = ticker.endswith((".KS", ".KQ"))
     currency = "KRW" if is_kr else "USD"
     market = "KR" if is_kr else "US"
@@ -192,6 +192,52 @@ def _normalize(ticker: str, info: dict, fin, bs, cf) -> Fundamentals:
     revenue_growth_recent = _num(info.get("revenueGrowth"))
     earnings_growth_recent = _num(info.get("earningsGrowth")) or _num(info.get("earningsQuarterlyGrowth"))
 
+    # 연속 배당 성장 연수 계산
+    div_growth_streak = 0
+    if tk is not None:
+        try:
+            import pandas as pd
+            divs = tk.dividends  # pandas Series with DatetimeIndex
+            if divs is not None and len(divs) > 0:
+                div_annual = divs.resample("YE").sum()
+                div_annual = div_annual[div_annual > 0]
+                streak = 0
+                vals = list(div_annual.values)
+                for i in range(len(vals)-1, 0, -1):
+                    if vals[i] > vals[i-1]:
+                        streak += 1
+                    else:
+                        break
+                div_growth_streak = streak
+        except Exception:
+            div_growth_streak = 0
+
+    # 분기별 EPS 성장 연속성
+    eps_beat_streak = 0
+    if tk is not None:
+        try:
+            eq = tk.quarterly_earnings  # DataFrame: Earnings, Revenue columns
+            if eq is not None and len(eq) >= 2:
+                eps_vals = list(eq["Earnings"].dropna())
+                for i in range(len(eps_vals)-1):
+                    if eps_vals[i] > eps_vals[i+1]:  # newest first
+                        eps_beat_streak += 1
+                    else:
+                        break
+        except Exception:
+            eps_beat_streak = 0
+
+    # D/E 3년 추이 — 개선 중이면 보너스
+    de_hist = []
+    eq_hist = hist.get("equity") or []
+    debt_hist = hist.get("total_debt") or []
+    for i in range(min(len(eq_hist), len(debt_hist), 3)):
+        e, d = eq_hist[i], debt_hist[i]
+        if e and e > 0 and d is not None:
+            de_hist.append(d / e)
+    # de_improving: True if D/E has been declining (oldest > newest)
+    de_improving = len(de_hist) >= 2 and de_hist[0] < de_hist[-1]  # index 0 = newest
+
     return Fundamentals(
         ticker=ticker,
         name=info.get("shortName") or info.get("longName") or ticker,
@@ -227,13 +273,16 @@ def _normalize(ticker: str, info: dict, fin, bs, cf) -> Fundamentals:
         bps=bps,
         shares=shares,
         hist=hist,
+        div_growth_streak=div_growth_streak,
+        eps_beat_streak=eps_beat_streak,
+        de_improving=de_improving,
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # 캐시 직렬화
 # ─────────────────────────────────────────────────────────────────────────
-CACHE_VERSION = "v3"   # 스키마 변경 시 올리면 자동 재수집
+CACHE_VERSION = "v4"   # 스키마 변경 시 올리면 자동 재수집
 
 
 def _cache_path(ticker: str) -> Path:
@@ -267,7 +316,7 @@ def fetch(ticker: str, use_cache: bool = True, retries: int = 3) -> Optional[Fun
             info = t.info
             if not info or info.get("marketCap") is None and info.get("currentPrice") is None:
                 raise ValueError("빈 응답(상장폐지/티커오류 가능)")
-            f = _normalize(ticker, info, t.financials, t.balance_sheet, t.cashflow)
+            f = _normalize(ticker, info, t.financials, t.balance_sheet, t.cashflow, tk=t)
             cp.write_text(json.dumps(_to_dict(f), ensure_ascii=False))
             return f
         except Exception as e:  # noqa: BLE001

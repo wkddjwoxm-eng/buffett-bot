@@ -225,6 +225,8 @@ class Metrics:
     buyback_signal: bool = False           # 자사주 매입 감지
     interest_coverage: Optional[float] = None
     div_growth_streak: int = 0             # 연속 배당 성장 연수 (estimate)
+    eps_beat_streak: int = 0              # 분기 EPS 연속 성장
+    de_improving: bool = False            # D/E 개선 추세
 
 
 def compute(f: Fundamentals, fetch_tech: bool = True) -> Metrics:
@@ -271,4 +273,6 @@ def compute(f: Fundamentals, fetch_tech: bool = True) -> Metrics:
         buyback_signal=buyback_signal,
         interest_coverage=f.interest_coverage,
         div_growth_streak=div_growth_streak,
+        eps_beat_streak=getattr(f, 'eps_beat_streak', 0),
+        de_improving=getattr(f, 'de_improving', False),
     )
