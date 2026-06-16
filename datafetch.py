@@ -201,6 +201,9 @@ def _normalize(ticker: str, info: dict, fin, bs, cf, tk=None) -> Fundamentals:
             if divs is not None and len(divs) > 0:
                 div_annual = divs.resample("YE").sum()
                 div_annual = div_annual[div_annual > 0]
+                # 현재 연도는 아직 끝나지 않아 배당합이 낮게 나옴 → 제외
+                current_year = pd.Timestamp.now().year
+                div_annual = div_annual[div_annual.index.year < current_year]
                 streak = 0
                 vals = list(div_annual.values)
                 for i in range(len(vals)-1, 0, -1):
@@ -212,17 +215,23 @@ def _normalize(ticker: str, info: dict, fin, bs, cf, tk=None) -> Fundamentals:
         except Exception:
             div_growth_streak = 0
 
-    # 분기별 EPS 성장 연속성
+    # 분기별 EPS 성장 연속성 (quarterly_income_stmt 사용)
     eps_beat_streak = 0
     if tk is not None:
         try:
-            eq = tk.quarterly_earnings  # DataFrame: Earnings, Revenue columns
-            if eq is not None and len(eq) >= 2:
-                eps_vals = list(eq["Earnings"].dropna())
-                for i in range(len(eps_vals)-1):
-                    if eps_vals[i] > eps_vals[i+1]:  # newest first
-                        eps_beat_streak += 1
-                    else:
+            qfin = tk.quarterly_income_stmt
+            if qfin is not None and not qfin.empty:
+                for label in ("Net Income", "Net Income Common Stockholders",
+                              "Net Income From Continuing Operation Net Minority Interest"):
+                    if label in qfin.index:
+                        import pandas as pd
+                        ni_q = [_num(v) for v in list(qfin.loc[label])]
+                        ni_q = [v for v in ni_q if v is not None]
+                        for i in range(len(ni_q)-1):
+                            if ni_q[i] > ni_q[i+1]:  # newest first
+                                eps_beat_streak += 1
+                            else:
+                                break
                         break
         except Exception:
             eps_beat_streak = 0
