@@ -191,36 +191,57 @@ def pick_card_html(v, rank: int, sec_map: dict, stars: str, display_name: str = 
 
 def _render_detail(v):
     """종목 상세 조언 블록 (스포트라이트 카드 클릭 + Tab4에서 공용)."""
-    from advisor import _one_liner
+    from advisor import _one_liner, _sector_context, _metric_narrative
     f, m, val = v.f, v.metrics, v.valuation
     cur = f.currency
     tech = getattr(m, "tech", None)
     fmt = lambda x: money(x, cur)
 
     with st.container(border=True):
-        c1, c2, c3, c4 = st.columns(4)
+        # ── 섹터 배경 설명 ──
+        ctx = _sector_context(v)
+        if ctx:
+            st.markdown(f"#### 🌐 섹터 배경")
+            st.info(ctx)
+
+        # ── 왜 매수/주의인가 — 지표 해석 ──
+        metric_lines = _metric_narrative(v)
+        if metric_lines:
+            st.markdown("#### 📊 주요 지표 해석")
+            for ln in metric_lines:
+                st.markdown(f"- {ln}")
+
+        st.divider()
+
+        # ── KPI 수치 ──
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("총점", f"{v.total:.0f} / 100")
         c1.metric("확신도", advisor.conviction_stars(v))
-        c2.metric("ROE", f"{f.roe*100:.1f}%" if f.roe else "—")
-        c2.metric("ROIC", f"{m.roic*100:.1f}%" if m.roic else "—")
-        c3.metric("현재가", fmt(f.price))
-        c3.metric("적정가치", fmt(val.get("fair")))
+        per_val = m.norm_per if m.norm_per is not None else f.per
+        c2.metric("PER", f"{per_val:.1f}배" if (per_val and per_val > 0) else "—")
+        c2.metric("PBR", f"{f.pbr:.1f}배" if (f.pbr and f.pbr > 0) else "—")
+        c3.metric("ROE", f"{f.roe*100:.1f}%" if f.roe else "—")
+        c3.metric("ROIC", f"{m.roic*100:.1f}%" if m.roic else "—")
+        c4.metric("현재가", fmt(f.price))
+        c4.metric("적정가치", fmt(val.get("fair")))
         mos = val.get("mos_pct")
         er = val.get("exp_return")
-        c4.metric("안전마진", f"{mos*100:+.0f}%" if mos is not None else "—",
+        c5.metric("안전마진", f"{mos*100:+.0f}%" if mos is not None else "—",
                   delta=("싸다" if (mos or 0) > 0 else "비싸다"),
                   delta_color="normal" if (mos or 0) > 0 else "inverse")
-        c4.metric("기대 연수익률", f"{er*100:.0f}%" if er is not None else "—")
+        c5.metric("기대 연수익률", f"{er*100:.0f}%" if er is not None else "—")
 
+        # ── 시나리오 DCF ──
         sc = val.get("scenarios", {})
         if sc:
             st.divider()
             d1, d2, d3 = st.columns(3)
-            d1.metric("🐻 약세", fmt(sc.get("bear")))
-            d2.metric("📊 기본", fmt(sc.get("base")))
-            d3.metric("🐂 강세", fmt(sc.get("bull")))
+            d1.metric("🐻 약세 시나리오", fmt(sc.get("bear")))
+            d2.metric("📊 기본 시나리오", fmt(sc.get("base")))
+            d3.metric("🐂 강세 시나리오", fmt(sc.get("bull")))
             st.caption(f"💰 매수 권장가 **{fmt(val.get('buy_below'))}** 이하 (안전마진 25%)")
 
+        # ── 역DCF ──
         ig = val.get("implied_growth")
         real = f.earnings_cagr
         if ig is not None:
@@ -231,6 +252,7 @@ def _render_detail(v):
             else:
                 st.info(f"📈 역DCF: 시장이 가정한 성장률 연 {ig*100:.0f}%")
 
+        # ── 기술변곡점 ──
         if tech and tech.news_count > 0:
             st.divider()
             t1, t2 = st.columns([1, 2])
@@ -238,16 +260,20 @@ def _render_detail(v):
             t1.markdown(f"**📡 기술·사업 신호**  \n{lc} **{tech.label}**")
             t1.caption(f"뉴스 {tech.news_count}건 스캔")
             if tech.positive_hits:
-                t2.markdown("**✅ 긍정:** " + " · ".join(tech.positive_hits))
+                t2.markdown("**✅ 긍정 키워드:** " + " · ".join(tech.positive_hits))
             if tech.negative_hits:
-                t2.markdown("**⚠️ 부정:** " + " · ".join(tech.negative_hits))
+                t2.markdown("**⚠️ 부정 키워드:** " + " · ".join(tech.negative_hits))
 
+        # ── 위험·F스코어 ──
         if v.flags:
-            st.error("⚑ 위험: " + "  /  ".join(v.flags))
+            st.error("⚑ 위험 요인: " + "  /  ".join(v.flags))
         if m.fscore is not None:
             passed = [d[2:] for d in m.fscore_detail if d.startswith("✓")]
-            st.caption(f"📊 F-Score {m.fscore}/9 통과: " + (", ".join(passed) if passed else "없음"))
-        st.info(f"👉 {_one_liner(v)}")
+            st.caption(f"📋 F-Score {m.fscore}/9 통과: " + (", ".join(passed) if passed else "없음"))
+
+        # ── 최종 한 줄 조언 ──
+        st.divider()
+        st.success(f"👉 {_one_liner(v)}")
 
 
 def ticker_sector_map() -> dict:
@@ -563,6 +589,7 @@ with tab1:
         _, emoji, short = rating_meta(v.rating)
         mos = v.valuation.get("mos_pct")
         er = v.valuation.get("exp_return")
+        per_val = m.norm_per if m.norm_per is not None else f.per
         rows.append({
             "#": i,
             "종목": disp_name(v)[:18],
@@ -570,6 +597,9 @@ with tab1:
             "총점": round(v.total, 1),
             "품질": round(v.quality, 1),
             "등급": f"{emoji} {short}",
+            "PER": round(per_val, 1) if (per_val and per_val > 0) else None,
+            "PBR": round(f.pbr, 1) if (f.pbr and f.pbr > 0) else None,
+            "ROE%": round(f.roe * 100, 0) if f.roe is not None else None,
             "안전마진": round(mos * 100, 0) if mos is not None else None,
             "기대수익": round(er * 100, 0) if er is not None else None,
             "ROIC": round(m.roic * 100, 0) if m.roic is not None else None,
@@ -583,6 +613,9 @@ with tab1:
             "총점": st.column_config.ProgressColumn("총점", min_value=0, max_value=100,
                                                    format="%.0f"),
             "품질": st.column_config.NumberColumn("품질/75", format="%.0f"),
+            "PER": st.column_config.NumberColumn("PER(배)", format="%.1f"),
+            "PBR": st.column_config.NumberColumn("PBR(배)", format="%.1f"),
+            "ROE%": st.column_config.NumberColumn("ROE%", format="%.0f%%"),
             "안전마진": st.column_config.NumberColumn("안전마진%", format="%+.0f%%"),
             "기대수익": st.column_config.NumberColumn("기대수익%", format="%.0f%%"),
             "ROIC": st.column_config.NumberColumn("ROIC%", format="%.0f%%"),
