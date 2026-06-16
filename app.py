@@ -196,26 +196,7 @@ with tab1:
 
     df = pd.DataFrame(rows)
 
-    def color_rating(val):
-        if "강력" in str(val): return "background-color: #1a6e1a; color: white"
-        if "매수 검토" in str(val): return "background-color: #2d6e2d; color: white"
-        if "대기" in str(val): return "background-color: #6e5c1a; color: white"
-        if "관망" in str(val): return "background-color: #3a3a3a"
-        if "회피" in str(val): return "background-color: #6e1a1a; color: white"
-        return ""
-
-    def color_tech(val):
-        if "강한 긍정" in str(val): return "color: #00ff88; font-weight: bold"
-        if "긍정" in str(val): return "color: #88ff88"
-        if "강한 부정" in str(val): return "color: #ff4444; font-weight: bold"
-        if "부정" in str(val): return "color: #ff8888"
-        return ""
-
-    styled = df.style.map(color_rating, subset=["등급"]) \
-                     .map(color_tech, subset=["기술신호"]) \
-                     .map(lambda v: "font-weight: bold", subset=["총점"])
-
-    st.dataframe(styled, use_container_width=True, hide_index=True, height=600)
+    st.dataframe(df, use_container_width=True, hide_index=True, height=600)
 
 # ── Tab2: 섹터 ────────────────────────────────────────────────────────────
 with tab2:
