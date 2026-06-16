@@ -364,8 +364,8 @@ def run_analysis(tickers: list[str], use_cache: bool, fetch_tech: bool):
     done_count = 0
     lock_funds = []
 
-    # 캐시 없을 때 yfinance rate-limit 고려해 최대 12 스레드
-    workers = min(12, total)
+    # 캐시 없을 때 yfinance rate-limit 고려해 최대 20 스레드
+    workers = min(20, total)
 
     def _fetch_one(tk):
         return fetch(tk, use_cache=use_cache)
