@@ -7,8 +7,14 @@ TechSignal 객체로 반환한다. 점수는 buffett.evaluate()에서 보너스/
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
+from datetime import date
+from pathlib import Path
 from typing import Optional
+
+_CACHE_DIR = Path(__file__).parent / "cache"
+_CACHE_DIR.mkdir(exist_ok=True)
 
 # ─────────────────────────────────────────────────────────────────────────
 # 키워드 사전 (영문·한국어 혼용)
@@ -73,29 +79,41 @@ class TechSignal:
 
 
 def _label(score: int) -> str:
-    if score >= 8:  return "강한 긍정 🚀"
-    if score >= 4:  return "긍정 ↑"
-    if score <= -8: return "강한 부정 🚨"
-    if score <= -3: return "부정 ↓"
+    if score >= 7:  return "강한 긍정 🚀"
+    if score >= 2:  return "긍정 ↑"
+    if score <= -7: return "강한 부정 🚨"
+    if score <= -2: return "부정 ↓"
     return "중립 →"
 
 
 def _score_adj(score: int) -> float:
-    """총점(100점) 보정: 너무 크면 펀더멘털 점수가 묻힘 → 최대 ±3점으로 제한."""
-    if score >= 8:  return 3.0
+    """총점(100점) 보정: 너무 크면 펀더멘털 점수가 묻힘 → 최대 ±3점으로 제한.
+    라벨(_label)과 임계값을 맞춰 '긍정인데 보정 0' 같은 불일치를 없앤다."""
+    if score >= 7:  return 3.0
     if score >= 4:  return 2.0
     if score >= 2:  return 1.0
-    if score <= -8: return -3.0
-    if score <= -3: return -2.0
-    if score <= -1: return -1.0
+    if score <= -7: return -3.0
+    if score <= -4: return -2.0
+    if score <= -2: return -1.0
     return 0.0
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # 분석 함수
 # ─────────────────────────────────────────────────────────────────────────
-def analyze(ticker: str, max_news: int = 15) -> TechSignal:
-    """yfinance 최신 뉴스에서 키워드를 스캔해 TechSignal 반환."""
+def _cache_path(ticker: str) -> Path:
+    return _CACHE_DIR / f"news_{ticker.replace('.', '_')}_{date.today():%Y%m%d}.json"
+
+
+def analyze(ticker: str, max_news: int = 15, use_cache: bool = True) -> TechSignal:
+    """yfinance 최신 뉴스에서 키워드를 스캔해 TechSignal 반환. 당일 결과는 캐시."""
+    cp = _cache_path(ticker)
+    if use_cache and cp.exists():
+        try:
+            return TechSignal(**json.loads(cp.read_text()))
+        except Exception:
+            pass
+
     try:
         import yfinance as yf
         raw = yf.Ticker(ticker).news or []
@@ -125,7 +143,7 @@ def analyze(ticker: str, max_news: int = 15) -> TechSignal:
                 total += w   # w는 음수
                 neg_hits.append(kw)
 
-    return TechSignal(
+    sig = TechSignal(
         score=total,
         label=_label(total),
         positive_hits=pos_hits[:6],
@@ -133,3 +151,8 @@ def analyze(ticker: str, max_news: int = 15) -> TechSignal:
         news_count=count,
         score_adj=_score_adj(total),
     )
+    try:
+        cp.write_text(json.dumps(asdict(sig), ensure_ascii=False))
+    except Exception:
+        pass
+    return sig

@@ -258,11 +258,11 @@ def _has_severe_flag(flags: list[str]) -> bool:
     return any("적자 상태" in x for x in flags)
 
 
-def evaluate(f: Fundamentals) -> Verdict:
+def evaluate(f: Fundamentals, fetch_tech: bool = True) -> Verdict:
     import metrics as _M           # 지연 임포트로 순환참조 회피
     import valuation as _V
 
-    m = _M.compute(f)
+    m = _M.compute(f, fetch_tech=fetch_tech)
     val = _V.summary(f, m)
 
     p, pn = score_profitability(f, m.roic)
