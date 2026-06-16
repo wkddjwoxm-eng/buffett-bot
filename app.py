@@ -273,12 +273,41 @@ with st.sidebar:
         market_code = {"국장 (KR)": "kr", "미장 (US)": "us", "전체 (All)": "all"}[market]
         custom_tickers = []
     else:
-        ticker_input = st.text_area(
-            "티커 입력 (쉼표·줄바꿈 구분)",
-            placeholder="예: AAPL, MSFT\n005930.KS, 000270.KS",
-            height=120,
+        from search_db import search as stock_search
+
+        search_q = st.text_input(
+            "🔎 회사 이름으로 검색",
+            placeholder="예: 삼성, 애플, 현대, Tesla...",
+            key="search_q",
         )
-        custom_tickers = [t.strip().upper() for t in ticker_input.replace("\n", ",").split(",") if t.strip()]
+
+        # 검색 결과 → 선택
+        if search_q:
+            hits = stock_search(search_q, max_results=12)
+            if hits:
+                chosen = st.multiselect(
+                    "검색 결과 (선택하면 분석 목록에 추가)",
+                    options=[h["display"] for h in hits],
+                    default=st.session_state.get("chosen_display", []),
+                    key="chosen_display",
+                    help="시총 큰 종목이 위에 표시됩니다",
+                )
+            else:
+                st.caption("검색 결과 없음 — 다른 이름으로 시도해보세요.")
+                chosen = st.session_state.get("chosen_display", [])
+        else:
+            chosen = st.session_state.get("chosen_display", [])
+
+        # display 문자열에서 티커 추출: "삼성전자 (005930.KS)" → "005930.KS"
+        import re
+        custom_tickers = []
+        for d in (chosen or []):
+            m = re.search(r'\(([^)]+)\)$', d)
+            if m:
+                custom_tickers.append(m.group(1))
+
+        if custom_tickers:
+            st.caption(f"분석 목록: **{', '.join(custom_tickers)}**")
         market_code = "custom"
 
     st.divider()
