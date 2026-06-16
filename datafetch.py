@@ -247,6 +247,47 @@ def _normalize(ticker: str, info: dict, fin, bs, cf, tk=None) -> Fundamentals:
     # de_improving: True if D/E has been declining (oldest > newest)
     de_improving = len(de_hist) >= 2 and de_hist[0] < de_hist[-1]  # index 0 = newest
 
+    # ── DART 데이터로 국장 보완 ──
+    dart_data = None
+    if is_kr:
+        try:
+            from dart_fetch import get_dart_fundamentals
+            dart_data = get_dart_fundamentals(ticker)
+        except Exception:
+            dart_data = None
+
+    if dart_data:
+        # ROE — yfinance 국장은 자주 누락/오류
+        if roe is None or roe == 0:
+            roe = dart_data.get("roe")
+        # ROE 다년 히스토리 재구성
+        if not roe_hist and dart_data.get("net_income_list") and dart_data.get("equity_list"):
+            ni_d = dart_data["net_income_list"]
+            eq_d = dart_data["equity_list"]
+            roe_hist = []
+            for i in range(min(len(ni_d), len(eq_d))):
+                if ni_d[i] and eq_d[i] and eq_d[i] > 0:
+                    roe_hist.append(ni_d[i] / eq_d[i])
+        # D/E — DART가 더 정확
+        if de is None and dart_data.get("de_ratio") is not None:
+            de = dart_data["de_ratio"]
+        # Operating margin
+        operating_margin_yf = _num(info.get("operatingMargins"))
+        if operating_margin_yf is None and dart_data.get("operating_margin") is not None:
+            operating_margin_dart = dart_data["operating_margin"]
+        else:
+            operating_margin_dart = operating_margin_yf
+        # Revenue/NI hist 보완 (yfinance 국장은 자주 비어있음)
+        if not hist["revenue"] and dart_data.get("revenue_list"):
+            hist["revenue"] = dart_data["revenue_list"]
+            rev_hist = hist["revenue"]
+        if not hist["net_income"] and dart_data.get("net_income_list"):
+            hist["net_income"] = dart_data["net_income_list"]
+            ni_hist = hist["net_income"]
+            ni = ni_hist[0] if ni_hist else ni
+    else:
+        operating_margin_dart = _num(info.get("operatingMargins"))
+
     return Fundamentals(
         ticker=ticker,
         name=info.get("shortName") or info.get("longName") or ticker,
@@ -259,7 +300,7 @@ def _normalize(ticker: str, info: dict, fin, bs, cf, tk=None) -> Fundamentals:
         roe=roe,
         roe_history=roe_hist,
         gross_margin=_num(info.get("grossMargins")),
-        operating_margin=_num(info.get("operatingMargins")),
+        operating_margin=operating_margin_dart,
         net_margin=_num(info.get("profitMargins")),
         revenue_cagr=_cagr(rev_hist),
         earnings_cagr=_cagr(ni_hist),
