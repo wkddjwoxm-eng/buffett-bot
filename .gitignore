@@ -4,3 +4,4 @@ __pycache__/
 # cache/
 watchlist.json
 .env
+.streamlit/secrets.toml

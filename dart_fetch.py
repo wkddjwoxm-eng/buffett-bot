@@ -21,8 +21,6 @@ def _get_api_key() -> str:
             key = st.secrets.get("DART_API_KEY", "")
         except Exception:
             pass
-    if not key:
-        key = "db0ad745fc380f0e7a97a340ac6f148faf34ddf4"
     return key
 
 
