@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
-cache/
+# cache/ 는 GitHub Actions가 매일 자동 수집해서 커밋함 — 제외하지 않음
+# cache/
 watchlist.json
 .env

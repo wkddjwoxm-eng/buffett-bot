@@ -1,0 +1,41 @@
+name: 매일 오전 8시 종목 캐시 수집
+
+on:
+  schedule:
+    # 매일 23:00 UTC = 한국시간 오전 8:00 KST
+    - cron: "0 23 * * *"
+  workflow_dispatch:  # 수동 실행 버튼도 활성화
+
+jobs:
+  prefetch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: buffett_bot
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 패키지 설치
+        run: pip install -q yfinance pandas numpy
+
+      - name: 캐시 디렉토리 생성
+        run: mkdir -p cache
+
+      - name: 전체 종목 데이터 사전 수집
+        run: python prefetch.py
+
+      - name: 캐시 파일 커밋 & 푸시
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cache/
+          # 변경사항이 있을 때만 커밋
+          git diff --staged --quiet || git commit -m "chore: 일일 캐시 자동 수집 $(date +'%Y-%m-%d KST+9')"
+          git push

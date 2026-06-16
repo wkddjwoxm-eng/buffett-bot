@@ -316,9 +316,9 @@ with st.expander("⚙️ 분석 설정  (클릭해서 열기 / 닫기)", expande
 
     col_mode, col_market = st.columns([1, 1])
     with col_mode:
-        mode = st.radio("분석 모드", ["유니버스 스크리닝", "직접 종목 입력"], horizontal=True)
+        mode = st.radio("분석 모드", ["전체종목분석", "직접 종목 입력"], horizontal=True)
     with col_market:
-        if mode == "유니버스 스크리닝":
+        if mode == "전체종목분석":
             market = st.selectbox("마켓", ["국장 (KR)", "미장 (US)", "전체 (All)"])
             market_code = {"국장 (KR)": "kr", "미장 (US)": "us", "전체 (All)": "all"}[market]
             custom_tickers = []
