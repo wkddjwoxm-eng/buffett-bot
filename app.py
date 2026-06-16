@@ -213,7 +213,7 @@ with tab1:
 
     styled = df.style.map(color_rating, subset=["등급"]) \
                      .map(color_tech, subset=["기술신호"]) \
-                     .background_gradient(subset=["총점"], cmap="RdYlGn", vmin=30, vmax=80)
+                     .map(lambda v: "font-weight: bold", subset=["총점"])
 
     st.dataframe(styled, use_container_width=True, hide_index=True, height=600)
 
@@ -252,10 +252,7 @@ with tab2:
     sec_rows.sort(key=lambda x: -x["평균 품질"])
 
     sec_df = pd.DataFrame(sec_rows)
-    st.dataframe(
-        sec_df.style.background_gradient(subset=["평균 품질"], cmap="RdYlGn", vmin=30, vmax=60),
-        use_container_width=True, hide_index=True
-    )
+    st.dataframe(sec_df, use_container_width=True, hide_index=True)
 
     # 막대그래프
     st.bar_chart(
