@@ -803,7 +803,25 @@ US_STOCKS: list[tuple[str, str, str, int]] = [
     ("오터테일", "Otter Tail Corp", "OTTR", 3),
 ]
 
-ALL_STOCKS = KR_STOCKS + US_STOCKS
+def _merge_universe(base: list) -> list:
+    """universe.py의 전 종목을 검색 DB에 자동 합침 — 누락 종목도 검색되게.
+    search_db에 이미 있으면 그대로 두고, 없으면 universe의 한글명으로 추가."""
+    have = {t for _, _, t, _ in base}
+    merged = list(base)
+    try:
+        from universe import KR_UNIVERSE, US_UNIVERSE
+        for uni in (KR_UNIVERSE, US_UNIVERSE):
+            for _sector, items in uni.items():
+                for tk, name in items:
+                    if tk not in have:
+                        merged.append((name, name, tk, 4))  # tier 4 = 보조
+                        have.add(tk)
+    except Exception:
+        pass
+    return merged
+
+
+ALL_STOCKS = _merge_universe(KR_STOCKS + US_STOCKS)
 
 
 def search(query: str, max_results: int = 10) -> list[dict]:

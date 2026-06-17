@@ -604,12 +604,31 @@ ers = [v.valuation.get("exp_return") for v in verdicts if v.valuation.get("exp_r
 avg_er = (sum(ers) / len(ers) * 100) if ers else None
 
 buy_ratio = len(buys) / n if n else 0
-if buy_ratio < 0.15:
-    temp = "🥶 비싼 장<br><span style='font-size:.78rem;color:#8b95a5'>현금 들고 기다릴 때</span>"
-elif buy_ratio < 0.35:
-    temp = "😐 선별적 기회<br><span style='font-size:.78rem;color:#8b95a5'>소수만 골라 담기</span>"
-else:
-    temp = "🔥 우호적 국면<br><span style='font-size:.78rem;color:#8b95a5'>분산 매수 검토</span>"
+
+
+def _fear_greed_index(buy_ratio: float, avg_er) -> tuple[int, str, str, str]:
+    """공포·탐욕 지수 0~100. 낮을수록 공포(저평가 多=매수 기회), 높을수록 탐욕(고평가).
+    싸게 살 수 있는 종목 비율(buy_ratio)과 평균 기대수익률(avg_er)로 산출."""
+    a = 90 - 160 * buy_ratio                 # 싼 종목 많을수록 낮음(공포)
+    if avg_er is not None:
+        b = 70 - 2.5 * avg_er                # 기대수익 높을수록 낮음(공포)
+        score = (a + b) / 2
+    else:
+        score = a
+    score = int(max(0, min(100, round(score))))
+    if score <= 24:   lab, emo, hint = "극도의 공포", "🥶", "역사적 저점 — 분할 매수 적기"
+    elif score <= 44: lab, emo, hint = "공포", "😨", "저평가 종목 多 — 매수 우호"
+    elif score <= 55: lab, emo, hint = "중립", "😐", "선별적 접근"
+    elif score <= 75: lab, emo, hint = "탐욕", "😏", "고평가 구간 — 신중하게"
+    else:             lab, emo, hint = "극도의 탐욕", "🤑", "과열 — 현금 비중 확대"
+    return score, lab, emo, hint
+
+
+fg_score, fg_label, fg_emoji, fg_hint = _fear_greed_index(buy_ratio, avg_er)
+fg_color = "#ff7a7a" if fg_score >= 56 else ("#34f5a0" if fg_score <= 44 else "#ffce4d")
+temp = (f"<span style='color:{fg_color};font-size:1.9rem;font-weight:800'>{fg_emoji} {fg_score}</span>"
+        f"<br><span style='font-size:.82rem;color:#cbd5e1'>{fg_label}</span>"
+        f"<br><span style='font-size:.7rem;color:#8b95a5'>{fg_hint}</span>")
 
 from pathlib import Path as _Path
 from datafetch import CACHE_DIR as _CACHE_DIR, CACHE_VERSION as _CV
@@ -636,7 +655,7 @@ st.markdown(f"""
   <span class="tag">🕗 {_ts}</span>
 </div>
 <div class="kpi-row">
-  <div class="kpi-card temp"><div class="num">{temp}</div><div class="lbl">시장 온도</div></div>
+  <div class="kpi-card temp"><div class="num">{temp}</div><div class="lbl">공포·탐욕 지수 (0=공포 · 100=탐욕)</div></div>
   <div class="kpi-card buy"><div class="num">{len(buys)}</div><div class="lbl">✅ 지금 매수</div></div>
   <div class="kpi-card wait"><div class="num">{len(waits)}</div><div class="lbl">⏳ 목표가 대기</div></div>
   <div class="kpi-card avoid"><div class="num">{len(avoids)}</div><div class="lbl">🚫 회피</div></div>
