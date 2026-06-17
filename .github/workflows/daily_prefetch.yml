@@ -1,11 +1,11 @@
-name: 하루 2회 종목 캐시 수집 (오전 8시·오후 8시 KST)
+name: 하루 2회 종목 캐시 수집 (오전 6시·오후 6시 KST)
 
 on:
   schedule:
-    # 매일 23:00 UTC = 한국시간 오전 8:00 KST
-    - cron: "0 23 * * *"
-    # 매일 11:00 UTC = 한국시간 오후 8:00 KST
-    - cron: "0 11 * * *"
+    # 매일 21:00 UTC = 한국시간 오전 6:00 KST
+    - cron: "0 21 * * *"
+    # 매일 09:00 UTC = 한국시간 오후 6:00 KST
+    - cron: "0 9 * * *"
   workflow_dispatch:  # 수동 실행 버튼도 활성화
 
 jobs:
@@ -40,7 +40,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f cache/results_kr.json cache/results_us.json
+          git add -f cache/results_kr.json cache/results_us.json cache/market_indicators.json
           # 변경사항이 있을 때만 커밋
           git diff --staged --quiet || git commit -m "chore: 일일 전체 분석 자동 수집 $(date +'%Y-%m-%d %H:%M KST+9')"
           git push
