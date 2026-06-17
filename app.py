@@ -390,7 +390,7 @@ if view == "📊 전체 종목 분석":
         auto_market = "kr" if "국장" in market_label else "us"
     with cc2:
         top_n = st.slider("상세 조언 상위", 3, 20, 8)
-    st.caption("⚡ 매일 **오전 8시·오후 8시**에 자동 수집된 결과를 바로 보여줍니다. "
+    st.caption("⚡ 매일 **오전 6시·오후 6시**에 자동 수집된 결과를 바로 보여줍니다. "
                "버튼을 누를 필요 없이, 마켓만 고르면 됩니다.")
 else:
     with st.expander("⚙️ 검색 / 분석 설정", expanded=True):
@@ -535,7 +535,7 @@ if view == "📊 전체 종목 분석":
         st.markdown(f"""
         <div class="hero">
           <h1>⏳ {mk_name} 자동 수집 대기 중</h1>
-          <p>매일 <b>오전 8시·오후 8시</b>에 전체 종목이 자동 분석됩니다.<br>
+          <p>매일 <b>오전 6시·오후 6시</b>에 전체 종목이 자동 분석됩니다.<br>
           아직 첫 수집이 완료되지 않았어요. 지금 바로 분석하려면 아래 버튼을 누르세요 (1~2분 소요).</p>
         </div>
         """, unsafe_allow_html=True)
