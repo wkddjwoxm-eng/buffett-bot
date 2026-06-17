@@ -618,12 +618,19 @@ def _fear_greed_label(score: int) -> tuple[str, str, str]:
 def _cnn_fear_greed() -> int | None:
     """CNN Fear & Greed Index (0~100). 미장 전용. 1시간 캐시. 실패 시 None."""
     try:
-        import requests as _req
+        import urllib.request, ssl, json as _json
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://edition.cnn.com/",
+            "Origin": "https://edition.cnn.com",
+        }
         url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-        r = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-        data = r.json()
-        score = data["fear_and_greed"]["score"]
-        return int(round(float(score)))
+        req = urllib.request.Request(url, headers=headers)
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=8, context=ctx) as r:
+            data = _json.loads(r.read())
+        return int(round(float(data["fear_and_greed"]["score"])))
     except Exception:
         return None
 
