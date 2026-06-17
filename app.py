@@ -39,20 +39,14 @@ _bg_path = _pl.Path(__file__).parent / "assets" / "buffett.jpg"
 if _bg_path.exists():
     _bg_b64 = _b64.b64encode(_bg_path.read_bytes()).decode()
     _bg_css = f"""
-    [data-testid="stAppViewContainer"] {{
-        background-image: url("data:image/jpeg;base64,{_bg_b64}");
-        background-size: 420px auto;
-        background-repeat: no-repeat;
-        background-position: right 40px top 80px;
+    [data-testid="stAppViewContainer"] > div:first-child {{
+        background-image:
+            linear-gradient(to right, rgba(10,14,22,1) 55%, rgba(10,14,22,0.55) 78%, rgba(10,14,22,0.2) 100%),
+            url("data:image/jpeg;base64,{_bg_b64}");
+        background-size: cover;
+        background-position: right top;
         background-attachment: fixed;
-    }}
-    [data-testid="stAppViewContainer"]::after {{
-        content: "";
-        position: fixed;
-        inset: 0;
-        background: rgba(10,14,22,0.82);
-        z-index: 0;
-        pointer-events: none;
+        min-height: 100vh;
     }}
     """
 else:
@@ -716,10 +710,14 @@ def _market_indicators():
     """환율·금리 실시간 수집 (30분 캐시)."""
     try:
         import yfinance as yf
-        usd_krw = yf.Ticker("USDKRW=X").fast_info.get("last_price")
-        jpy_krw = yf.Ticker("JPYKRW=X").fast_info.get("last_price")
-        usd_str  = f"₩{usd_krw:,.0f}" if usd_krw else "—"
-        jpy_str  = f"₩{jpy_krw * 100:,.1f}" if jpy_krw else "—"
+        def _fx(ticker):
+            tk = yf.Ticker(ticker)
+            v = tk.fast_info.get("lastPrice") or tk.info.get("regularMarketPrice")
+            return float(v) if v else None
+        usd_krw = _fx("USDKRW=X")
+        jpy_krw = _fx("JPYKRW=X")
+        usd_str = f"₩{usd_krw:,.0f}" if usd_krw else "—"
+        jpy_str = f"₩{jpy_krw * 100:,.1f}" if jpy_krw else "—"
     except Exception:
         usd_str = jpy_str = "—"
     try:
