@@ -43,8 +43,9 @@ if _bg_path.exists():
         background-image:
             linear-gradient(to right, rgba(10,14,22,0.92) 40%, rgba(10,14,22,0.35) 70%, rgba(10,14,22,0.1) 100%),
             url("data:image/jpeg;base64,{_bg_b64}");
-        background-size: auto 100vh;
-        background-position: right -60px top 0px;
+        background-size: 55% auto;
+        background-repeat: no-repeat;
+        background-position: right top;
         background-attachment: fixed;
         min-height: 100vh;
     }}
