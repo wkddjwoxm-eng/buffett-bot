@@ -606,29 +606,60 @@ avg_er = (sum(ers) / len(ers) * 100) if ers else None
 buy_ratio = len(buys) / n if n else 0
 
 
-def _fear_greed_index(buy_ratio: float, avg_er) -> tuple[int, str, str, str]:
-    """공포·탐욕 지수 0~100. 낮을수록 공포(저평가 多=매수 기회), 높을수록 탐욕(고평가).
-    싸게 살 수 있는 종목 비율(buy_ratio)과 평균 기대수익률(avg_er)로 산출."""
-    a = 90 - 160 * buy_ratio                 # 싼 종목 많을수록 낮음(공포)
+def _fear_greed_label(score: int) -> tuple[str, str, str]:
+    if score <= 24:   return "극도의 공포", "🥶", "역사적 저점 — 분할 매수 적기"
+    elif score <= 44: return "공포", "😨", "저평가 종목 多 — 매수 우호"
+    elif score <= 55: return "중립", "😐", "선별적 접근"
+    elif score <= 75: return "탐욕", "😏", "고평가 구간 — 신중하게"
+    else:             return "극도의 탐욕", "🤑", "과열 — 현금 비중 확대"
+
+
+@st.cache_data(ttl=3600)
+def _cnn_fear_greed() -> int | None:
+    """CNN Fear & Greed Index (0~100). 미장 전용. 1시간 캐시. 실패 시 None."""
+    try:
+        import requests as _req
+        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+        r = _req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+        data = r.json()
+        score = data["fear_and_greed"]["score"]
+        return int(round(float(score)))
+    except Exception:
+        return None
+
+
+def _fear_greed_kr(buy_ratio: float, avg_er) -> int:
+    """국장 자체 공탐지수: 저평가 비율 + 기대수익률 기반."""
+    a = 90 - 160 * buy_ratio
     if avg_er is not None:
-        b = 70 - 2.5 * avg_er                # 기대수익 높을수록 낮음(공포)
+        b = 70 - 2.5 * avg_er
         score = (a + b) / 2
     else:
         score = a
-    score = int(max(0, min(100, round(score))))
-    if score <= 24:   lab, emo, hint = "극도의 공포", "🥶", "역사적 저점 — 분할 매수 적기"
-    elif score <= 44: lab, emo, hint = "공포", "😨", "저평가 종목 多 — 매수 우호"
-    elif score <= 55: lab, emo, hint = "중립", "😐", "선별적 접근"
-    elif score <= 75: lab, emo, hint = "탐욕", "😏", "고평가 구간 — 신중하게"
-    else:             lab, emo, hint = "극도의 탐욕", "🤑", "과열 — 현금 비중 확대"
-    return score, lab, emo, hint
+    return int(max(0, min(100, round(score))))
 
 
-fg_score, fg_label, fg_emoji, fg_hint = _fear_greed_index(buy_ratio, avg_er)
+# 마켓 판별
+_rs = st.session_state.get("result_source", "")
+_is_us = _rs == "auto:us" or (
+    _rs == "custom" and all(not v.f.ticker.endswith(".KS") and not v.f.ticker.endswith(".KQ")
+                            for v in verdicts[:3])
+)
+
+if _is_us:
+    _cnn = _cnn_fear_greed()
+    fg_score = _cnn if _cnn is not None else _fear_greed_kr(buy_ratio, avg_er)
+    _source_hint = "출처: CNN Fear & Greed Index" if _cnn is not None else "CNN 연결 실패 — 자체 추정"
+else:
+    fg_score = _fear_greed_kr(buy_ratio, avg_er)
+    _source_hint = "출처: 버핏봇 자체 산출 (저평가 비율·기대수익률)"
+
+fg_label, fg_emoji, fg_hint = _fear_greed_label(fg_score)
 fg_color = "#ff7a7a" if fg_score >= 56 else ("#34f5a0" if fg_score <= 44 else "#ffce4d")
 temp = (f"<span style='color:{fg_color};font-size:1.9rem;font-weight:800'>{fg_emoji} {fg_score}</span>"
         f"<br><span style='font-size:.82rem;color:#cbd5e1'>{fg_label}</span>"
-        f"<br><span style='font-size:.7rem;color:#8b95a5'>{fg_hint}</span>")
+        f"<br><span style='font-size:.7rem;color:#8b95a5'>{fg_hint}</span>"
+        f"<br><span style='font-size:.65rem;color:#6b7280'>{_source_hint}</span>")
 
 from pathlib import Path as _Path
 from datafetch import CACHE_DIR as _CACHE_DIR, CACHE_VERSION as _CV
