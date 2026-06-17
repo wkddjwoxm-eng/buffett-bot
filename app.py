@@ -34,6 +34,30 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────────────────
 # 커스텀 스타일
 # ─────────────────────────────────────────────────────────────────────────
+import base64 as _b64, pathlib as _pl
+_bg_path = _pl.Path(__file__).parent / "assets" / "buffett.jpg"
+if _bg_path.exists():
+    _bg_b64 = _b64.b64encode(_bg_path.read_bytes()).decode()
+    _bg_css = f"""
+    [data-testid="stAppViewContainer"] {{
+        background-image: url("data:image/jpeg;base64,{_bg_b64}");
+        background-size: 420px auto;
+        background-repeat: no-repeat;
+        background-position: right 40px top 80px;
+        background-attachment: fixed;
+    }}
+    [data-testid="stAppViewContainer"]::after {{
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: rgba(10,14,22,0.82);
+        z-index: 0;
+        pointer-events: none;
+    }}
+    """
+else:
+    _bg_css = ""
+
 st.markdown("""
 <style>
 /* ── 기본 크롬 정리 ───────────────────────────────────── */
@@ -130,6 +154,9 @@ button[data-baseweb="tab"] {font-size:1rem; font-weight:600;}
 .section-sub {color:#8b95a5; font-size:.88rem; margin-bottom:14px;}
 </style>
 """, unsafe_allow_html=True)
+
+if _bg_css:
+    st.markdown(f"<style>{_bg_css}</style>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -672,7 +699,6 @@ from pathlib import Path as _Path
 from datafetch import CACHE_DIR as _CACHE_DIR, CACHE_VERSION as _CV
 
 def _data_timestamp() -> str:
-    """캐시 파일 중 가장 최근 mtime을 KST로 반환."""
     import os
     files = list(_CACHE_DIR.glob(f"*_{_CV}_*.json"))
     if not files:
@@ -684,6 +710,37 @@ def _data_timestamp() -> str:
     dt = datetime.fromtimestamp(latest.stat().st_mtime, tz=kst)
     return dt.strftime("%Y년 %m월 %d일 %H:%M KST 기준")
 
+
+@st.cache_data(ttl=1800)
+def _market_indicators():
+    """환율·금리 실시간 수집 (30분 캐시)."""
+    try:
+        import yfinance as yf
+        usd_krw = yf.Ticker("USDKRW=X").fast_info.get("last_price")
+        jpy_krw = yf.Ticker("JPYKRW=X").fast_info.get("last_price")
+        usd_str  = f"₩{usd_krw:,.0f}" if usd_krw else "—"
+        jpy_str  = f"₩{jpy_krw * 100:,.1f}" if jpy_krw else "—"
+    except Exception:
+        usd_str = jpy_str = "—"
+    try:
+        import yfinance as yf
+        irx = yf.Ticker("^IRX").fast_info.get("last_price")  # 미국 단기금리 근사치
+        us_rate_str = f"{irx:.2f}%" if irx else "—"
+    except Exception:
+        us_rate_str = "—"
+    return usd_str, jpy_str, us_rate_str
+
+
+_usd_str, _jpy_str, _us_rate_str = _market_indicators()
+_KR_RATE = "2.75%"  # 한국은행 기준금리 — GitHub Actions 수집 시 갱신
+_rate_card = (
+    f"<span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_us_rate_str}</span>"
+    f"<br><span style='font-size:.72rem;color:#8b95a5'>미국 기준금리 (IRX 근사)</span>"
+) if _is_us else (
+    f"<span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_KR_RATE}</span>"
+    f"<br><span style='font-size:.72rem;color:#8b95a5'>한국 기준금리</span>"
+)
+
 _ts = st.session_state.get("data_ts") or _data_timestamp()
 
 st.markdown(f"""
@@ -694,10 +751,11 @@ st.markdown(f"""
 </div>
 <div class="kpi-row">
   <div class="kpi-card temp"><div class="num">{temp}</div><div class="lbl">공포·탐욕 지수 (0=공포 · 100=탐욕)</div></div>
-  <div class="kpi-card buy"><div class="num">{len(buys)}</div><div class="lbl">✅ 지금 매수</div></div>
-  <div class="kpi-card wait"><div class="num">{len(waits)}</div><div class="lbl">⏳ 목표가 대기</div></div>
-  <div class="kpi-card avoid"><div class="num">{len(avoids)}</div><div class="lbl">🚫 회피</div></div>
-  <div class="kpi-card"><div class="num">{f'{avg_er:.0f}%' if avg_er is not None else '—'}</div><div class="lbl">평균 기대수익률</div></div>
+  <div class="kpi-card">
+    <div class="num"><span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_usd_str}</span><br><span style='font-size:.72rem;color:#8b95a5'>달러 / 원</span></div>
+    <div class="lbl" style="margin-top:8px"><span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_jpy_str}</span><br><span style='font-size:.72rem;color:#8b95a5'>100엔 / 원</span></div>
+  </div>
+  <div class="kpi-card"><div class="num">{_rate_card}</div></div>
 </div>
 """, unsafe_allow_html=True)
 
