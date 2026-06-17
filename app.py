@@ -41,10 +41,10 @@ if _bg_path.exists():
     _bg_css = f"""
     [data-testid="stAppViewContainer"] > div:first-child {{
         background-image:
-            linear-gradient(to right, rgba(10,14,22,1) 55%, rgba(10,14,22,0.55) 78%, rgba(10,14,22,0.2) 100%),
+            linear-gradient(to right, rgba(10,14,22,0.92) 40%, rgba(10,14,22,0.35) 70%, rgba(10,14,22,0.1) 100%),
             url("data:image/jpeg;base64,{_bg_b64}");
         background-size: cover;
-        background-position: right top;
+        background-position: right center;
         background-attachment: fixed;
         min-height: 100vh;
     }}
@@ -722,8 +722,9 @@ def _market_indicators():
         usd_str = jpy_str = "—"
     try:
         import yfinance as yf
-        irx = yf.Ticker("^IRX").fast_info.get("last_price")  # 미국 단기금리 근사치
-        us_rate_str = f"{irx:.2f}%" if irx else "—"
+        tk_irx = yf.Ticker("^IRX")
+        irx = tk_irx.fast_info.get("lastPrice") or tk_irx.info.get("regularMarketPrice")
+        us_rate_str = f"{float(irx):.2f}%" if irx else "—"
     except Exception:
         us_rate_str = "—"
     return usd_str, jpy_str, us_rate_str
