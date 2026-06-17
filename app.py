@@ -43,8 +43,8 @@ if _bg_path.exists():
         background-image:
             linear-gradient(to right, rgba(10,14,22,0.92) 40%, rgba(10,14,22,0.35) 70%, rgba(10,14,22,0.1) 100%),
             url("data:image/jpeg;base64,{_bg_b64}");
-        background-size: cover;
-        background-position: right center;
+        background-size: auto 100vh;
+        background-position: right -60px top 0px;
         background-attachment: fixed;
         min-height: 100vh;
     }}
@@ -705,33 +705,37 @@ def _data_timestamp() -> str:
     return dt.strftime("%Y년 %m월 %d일 %H:%M KST 기준")
 
 
-@st.cache_data(ttl=1800)
 def _market_indicators():
-    """환율·금리 실시간 수집 (30분 캐시)."""
+    """캐시 파일에서 환율·금리 로드. 없으면 실시간 수집."""
+    import json as _json
+    from pathlib import Path as _P
+    _ind_path = _P(__file__).parent / "cache" / "market_indicators.json"
+    if _ind_path.exists():
+        try:
+            d = _json.loads(_ind_path.read_text(encoding="utf-8"))
+            return (d.get("usd_krw") or "—", d.get("jpy_krw_100") or "—",
+                    d.get("us_rate") or "—", d.get("kr_rate") or "2.75%")
+        except Exception:
+            pass
+    # 파일 없으면 실시간 fallback
     try:
         import yfinance as yf
-        def _fx(ticker):
-            tk = yf.Ticker(ticker)
+        def _px(t):
+            tk = yf.Ticker(t)
             v = tk.fast_info.get("lastPrice") or tk.info.get("regularMarketPrice")
             return float(v) if v else None
-        usd_krw = _fx("USDKRW=X")
-        jpy_krw = _fx("JPYKRW=X")
-        usd_str = f"₩{usd_krw:,.0f}" if usd_krw else "—"
-        jpy_str = f"₩{jpy_krw * 100:,.1f}" if jpy_krw else "—"
+        usd = _px("USDKRW=X"); jpy = _px("JPYKRW=X"); irx = _px("^IRX")
+        return (
+            f"₩{usd:,.0f}" if usd else "—",
+            f"₩{jpy*100:,.1f}" if jpy else "—",
+            f"{irx:.2f}%" if irx else "—",
+            "2.75%",
+        )
     except Exception:
-        usd_str = jpy_str = "—"
-    try:
-        import yfinance as yf
-        tk_irx = yf.Ticker("^IRX")
-        irx = tk_irx.fast_info.get("lastPrice") or tk_irx.info.get("regularMarketPrice")
-        us_rate_str = f"{float(irx):.2f}%" if irx else "—"
-    except Exception:
-        us_rate_str = "—"
-    return usd_str, jpy_str, us_rate_str
+        return "—", "—", "—", "2.75%"
 
 
-_usd_str, _jpy_str, _us_rate_str = _market_indicators()
-_KR_RATE = "2.75%"  # 한국은행 기준금리 — GitHub Actions 수집 시 갱신
+_usd_str, _jpy_str, _us_rate_str, _KR_RATE = _market_indicators()
 _rate_card = (
     f"<span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_us_rate_str}</span>"
     f"<br><span style='font-size:.72rem;color:#8b95a5'>미국 기준금리 (IRX 근사)</span>"

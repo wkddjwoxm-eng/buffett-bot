@@ -4,6 +4,7 @@ __pycache__/
 cache/*
 !cache/results_kr.json
 !cache/results_us.json
+!cache/market_indicators.json
 watchlist.json
 .env
 .streamlit/secrets.toml

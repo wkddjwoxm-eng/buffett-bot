@@ -18,6 +18,35 @@ from universe import get_universe
 from datafetch import fetch
 from buffett import evaluate
 import results_io
+import json
+from pathlib import Path
+
+_CACHE_DIR = Path(__file__).parent / "cache"
+
+
+def collect_market_indicators() -> dict:
+    """환율·기준금리 수집 후 cache/market_indicators.json 저장."""
+    result = {"usd_krw": None, "jpy_krw_100": None, "us_rate": None, "kr_rate": "2.75%"}
+    try:
+        import yfinance as yf
+        def _px(ticker):
+            tk = yf.Ticker(ticker)
+            v = tk.fast_info.get("lastPrice") or tk.info.get("regularMarketPrice")
+            return float(v) if v else None
+        usd = _px("USDKRW=X")
+        jpy = _px("JPYKRW=X")
+        irx = _px("^IRX")
+        if usd: result["usd_krw"] = f"₩{usd:,.0f}"
+        if jpy: result["jpy_krw_100"] = f"₩{jpy*100:,.1f}"
+        if irx: result["us_rate"] = f"{irx:.2f}%"
+    except Exception as e:
+        print(f"  [indicators] 수집 실패: {e}")
+    _CACHE_DIR.mkdir(exist_ok=True)
+    (_CACHE_DIR / "market_indicators.json").write_text(
+        json.dumps(result, ensure_ascii=False), encoding="utf-8"
+    )
+    print(f"  [indicators] USD={result['usd_krw']} JPY100={result['jpy_krw_100']} US={result['us_rate']}")
+    return result
 
 # 뉴스(기술변곡점)까지 수집할지 — 환경변수로 끌 수 있음 (속도/요청량 조절)
 FETCH_TECH = os.environ.get("PRECOMPUTE_TECH", "1") != "0"
@@ -64,6 +93,7 @@ def precompute_market(market: str, workers: int = 16) -> int:
 
 
 def precompute_all(workers: int = 16) -> None:
+    collect_market_indicators()
     for mk in ("kr", "us"):
         precompute_market(mk, workers=workers)
 
