@@ -30,16 +30,17 @@ jobs:
       - name: 캐시 디렉토리 생성
         run: mkdir -p cache
 
-      - name: 전체 종목 데이터 사전 수집
+      - name: 전체 종목 사전 분석 (점수·적정가·조언까지 계산)
         env:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
-        run: python prefetch.py
+          PRECOMPUTE_TECH: "1"   # 뉴스(기술변곡점)까지 수집. 끄려면 "0"
+        run: python precompute.py all
 
-      - name: 캐시 파일 커밋 & 푸시
+      - name: 결과 파일 커밋 & 푸시
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add cache/
+          git add -f cache/results_kr.json cache/results_us.json
           # 변경사항이 있을 때만 커밋
-          git diff --staged --quiet || git commit -m "chore: 일일 캐시 자동 수집 $(date +'%Y-%m-%d KST+9')"
+          git diff --staged --quiet || git commit -m "chore: 일일 전체 분석 자동 수집 $(date +'%Y-%m-%d %H:%M KST+9')"
           git push

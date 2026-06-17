@@ -339,21 +339,39 @@ def ticker_name_map() -> dict:
 # ─────────────────────────────────────────────────────────────────────────
 import re
 
-with st.expander("⚙️ 분석 설정  (클릭해서 열기 / 닫기)", expanded=st.session_state.get("panel_open", True)):
-    st.session_state["panel_open"] = True  # expander가 열려 있는 동안 유지
+# 기본값 (아래 모드별로 덮어씀)
+run_btn = watch_btn = check_btn = False
+custom_tickers: list[str] = []
+top_n = 8
+use_cache = True
+fetch_tech = True
+auto_market = "kr"
 
-    col_mode, col_market = st.columns([1, 1])
-    with col_mode:
-        mode = st.radio("분석 모드", ["전체종목분석", "직접 종목 입력"], horizontal=True)
-    with col_market:
-        if mode == "전체종목분석":
-            market = st.selectbox("마켓", ["국장 (KR)", "미장 (US)", "전체 (All)"])
-            market_code = {"국장 (KR)": "kr", "미장 (US)": "us", "전체 (All)": "all"}[market]
-            custom_tickers = []
-        else:
-            market_code = "custom"
+view = st.radio(
+    "보기 모드",
+    ["📊 전체 종목 분석", "🔎 직접 종목 검색"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="view_mode",
+)
 
-    if mode == "직접 종목 입력":
+if view == "📊 전체 종목 분석":
+    cc1, cc2 = st.columns([3, 1])
+    with cc1:
+        market_label = st.radio(
+            "마켓",
+            ["🇰🇷 국장 (KR)", "🇺🇸 미장 (US)"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="auto_market_label",
+        )
+        auto_market = "kr" if "국장" in market_label else "us"
+    with cc2:
+        top_n = st.slider("상세 조언 상위", 3, 20, 8)
+    st.caption("⚡ 매일 **오전 8시·오후 8시**에 자동 수집된 결과를 바로 보여줍니다. "
+               "버튼을 누를 필요 없이, 마켓만 고르면 됩니다.")
+else:
+    with st.expander("⚙️ 검색 / 분석 설정", expanded=True):
         from search_db import search as stock_search
 
         col_s1, col_s2 = st.columns([1, 2])
@@ -380,25 +398,24 @@ with st.expander("⚙️ 분석 설정  (클릭해서 열기 / 닫기)", expande
             else:
                 chosen = st.session_state.get("chosen_display", [])
 
-        custom_tickers = []
         for d in (chosen or []):
-            m = re.search(r'\(([^)]+)\)$', d)
-            if m:
-                custom_tickers.append(m.group(1))
+            mm = re.search(r'\(([^)]+)\)$', d)
+            if mm:
+                custom_tickers.append(mm.group(1))
         if custom_tickers:
             st.caption(f"분석 목록: **{', '.join(custom_tickers)}**")
 
-    col_opt1, col_opt2, col_opt3 = st.columns([2, 1, 1])
-    with col_opt1:
-        top_n = st.slider("상세 조언 상위 종목 수", 3, 20, 8)
-    with col_opt2:
-        use_cache = st.toggle("당일 캐시 사용", value=True)
-        fetch_tech = st.toggle("기술변곡점 뉴스", value=True)
-    with col_opt3:
-        run_btn = st.button("🔍 분석 시작", type="primary", use_container_width=True)
-        c1, c2 = st.columns(2)
-        watch_btn = c1.button("💾 저장", use_container_width=True)
-        check_btn = c2.button("🔔 점검", use_container_width=True)
+        col_opt1, col_opt2, col_opt3 = st.columns([2, 1, 1])
+        with col_opt1:
+            top_n = st.slider("상세 조언 상위 종목 수", 3, 20, 8)
+        with col_opt2:
+            use_cache = st.toggle("당일 캐시 사용", value=True)
+            fetch_tech = st.toggle("기술변곡점 뉴스", value=True)
+        with col_opt3:
+            run_btn = st.button("🔍 분석 시작", type="primary", use_container_width=True)
+            c1, c2 = st.columns(2)
+            watch_btn = c1.button("💾 저장", use_container_width=True)
+            check_btn = c2.button("🔔 점검", use_container_width=True)
 
 st.caption("⚠️ 교육·연구용 참고 도구. 투자 책임은 본인에게 있습니다.")
 
@@ -470,33 +487,73 @@ def run_analysis(tickers: list[str], use_cache: bool, fetch_tech: bool):
     return verdicts
 
 
-if run_btn:
-    if market_code == "custom":
-        tickers = custom_tickers
-    else:
-        from universe import get_universe
-        tickers = [tk for tk, _, _ in get_universe(market_code)]
+# ─────────────────────────────────────────────────────────────────────────
+# 결과 준비 — 전체 분석(사전수집 즉시 로드) / 직접 검색(버튼)
+# ─────────────────────────────────────────────────────────────────────────
+ready = False
 
-    if not tickers:
-        st.warning("분석할 티커를 입력하거나 마켓을 선택하세요.")
+if view == "📊 전체 종목 분석":
+    import results_io
+
+    ck = f"auto_loaded_{auto_market}"
+    if ck not in st.session_state:
+        st.session_state[ck] = results_io.load_market(auto_market)
+    loaded_verdicts, loaded_ts = st.session_state[ck]
+
+    if loaded_verdicts:
+        st.session_state["verdicts"] = loaded_verdicts
+        st.session_state["sec_map"] = ticker_sector_map()
+        st.session_state["name_map"] = ticker_name_map()
+        st.session_state["data_ts"] = loaded_ts or ""
+        st.session_state["result_source"] = f"auto:{auto_market}"
+        ready = True
+    else:
+        # 아직 자동 수집 전 — 안내 + 즉시 수집 폴백
+        mk_name = "국장" if auto_market == "kr" else "미장"
+        st.markdown(f"""
+        <div class="hero">
+          <h1>⏳ {mk_name} 자동 수집 대기 중</h1>
+          <p>매일 <b>오전 8시·오후 8시</b>에 전체 종목이 자동 분석됩니다.<br>
+          아직 첫 수집이 완료되지 않았어요. 지금 바로 분석하려면 아래 버튼을 누르세요 (1~2분 소요).</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button(f"⚡ {mk_name} 지금 즉시 분석", type="primary"):
+            from universe import get_universe
+            tickers = [tk for tk, _, _ in get_universe(auto_market)]
+            st.session_state["verdicts"] = run_analysis(tickers, True, False)
+            st.session_state["sec_map"] = ticker_sector_map()
+            st.session_state["name_map"] = ticker_name_map()
+            st.session_state["data_ts"] = "방금 수집 (실시간)"
+            st.session_state["result_source"] = f"auto:{auto_market}"
+            st.rerun()
         st.stop()
 
-    st.session_state["verdicts"] = run_analysis(tickers, use_cache, fetch_tech)
+elif run_btn:
+    if not custom_tickers:
+        st.warning("회사 이름으로 검색해 종목을 선택한 뒤 ‘분석 시작’을 누르세요.")
+        st.stop()
+    st.session_state["verdicts"] = run_analysis(custom_tickers, use_cache, fetch_tech)
     st.session_state["sec_map"] = ticker_sector_map()
     st.session_state["name_map"] = ticker_name_map()
-    st.session_state["analyzed"] = True
+    st.session_state["data_ts"] = "방금 수집 (실시간)"
+    st.session_state["result_source"] = "custom"
+    ready = True
+
+elif st.session_state.get("result_source") == "custom" and st.session_state.get("verdicts"):
+    # 직접 검색 결과를 이미 본 상태 — 재실행 시 유지
+    ready = True
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# 랜딩 (분석 전)
+# 직접 검색 모드: 아직 분석 전이면 안내 후 정지
 # ─────────────────────────────────────────────────────────────────────────
-if not st.session_state.get("analyzed"):
+if not ready:
     st.markdown("""
     <div class="hero">
-      <h1>버핏 봇</h1>
-      <p>워런 버핏 · 벤저민 그레이엄의 가치투자 원칙을 정량화해 국장·미장을 같은 잣대로 채점합니다.<br>
-      <b>어느 산업이 좋은지</b>, <b>지금 사도 되는 가격인지</b>, <b>무엇을·얼마에·왜</b> 사고 피할지 조언합니다.</p>
-      <span class="tag">왼쪽에서 마켓을 고르고 ‘🔍 분석 시작’을 누르세요</span>
+      <h1>🔎 직접 종목 검색</h1>
+      <p>회사 이름을 검색해 종목을 고르고 <b>‘🔍 분석 시작’</b>을 누르면<br>
+      버핏 잣대로 채점하고 적정 매수가·이유·위험을 조언합니다.</p>
+      <span class="tag">전체 종목을 보려면 위에서 <b>📊 전체 종목 분석</b>을 선택하세요</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -505,9 +562,6 @@ if not st.session_state.get("analyzed"):
         ("🏆", "버핏 100점 채점", "수익성·해자 30 / 재무안정 25 / 성장 20 / 밸류 25 + 기술신호 ±3"),
         ("💰", "입체 적정가", "시나리오 DCF·역DCF·안전마진·기대 연수익률로 ‘살 가격’ 제시"),
         ("📡", "기술변곡점 탐지", "최신 뉴스에서 HBM·AI·수주 등 모멘텀 신호를 점수에 반영"),
-        ("🏭", "섹터 진단", "어느 산업이 괜찮은지 평균 품질·관점 비교"),
-        ("💼", "포트폴리오 조언", "시장 온도 + 지금매수·목표가대기·회피 버킷 분류"),
-        ("📌", "워치리스트", "‘대기’ 종목 목표가 저장 → 도달 시 알림"),
     ]
     for i, (ico, t, d) in enumerate(cards):
         with cols[i % 3]:
@@ -573,7 +627,7 @@ def _data_timestamp() -> str:
     dt = datetime.fromtimestamp(latest.stat().st_mtime, tz=kst)
     return dt.strftime("%Y년 %m월 %d일 %H:%M KST 기준")
 
-_ts = _data_timestamp()
+_ts = st.session_state.get("data_ts") or _data_timestamp()
 
 st.markdown(f"""
 <div class="hero">
