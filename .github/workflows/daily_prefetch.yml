@@ -8,6 +8,9 @@ on:
     - cron: "0 9 * * *"
   workflow_dispatch:  # 수동 실행 버튼도 활성화
 
+permissions:
+  contents: write
+
 jobs:
   prefetch:
     runs-on: ubuntu-latest
