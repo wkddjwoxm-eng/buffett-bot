@@ -11,9 +11,6 @@ on:
 jobs:
   prefetch:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: buffett_bot
 
     steps:
       - name: 코드 체크아웃
