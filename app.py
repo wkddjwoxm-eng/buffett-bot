@@ -932,7 +932,11 @@ with tab1:
             "기술신호": tech.label if (tech and tech.news_count > 0) else "—",
         })
 
-    st.caption(f"표시 {len(rows)}개 / 전체 {len(verdicts)}개  ·  👆 종목 행을 클릭하면 아래에 상세 조언이 열립니다")
+    st.caption(f"표시 {len(rows)}개 / 전체 {len(verdicts)}개  ·  👆 표에서 종목을 **한 번 클릭**하면 상세 조언이 바로 위에 열립니다")
+
+    # 상세 조언이 표 '위'에 뜨도록 미리 자리를 잡아둔다
+    detail_box = st.container()
+
     df = pd.DataFrame(rows)
     table_state = st.dataframe(
         df, use_container_width=True, hide_index=True, height=560,
@@ -951,21 +955,20 @@ with tab1:
         },
     )
 
-    # ── 행 클릭 → 해당 종목 상세 조언 ──
+    # ── 행 클릭 → 해당 종목 상세 조언 (표 위 컨테이너에 렌더) ──
     try:
         sel_rows = table_state["selection"]["rows"]
     except (KeyError, TypeError, IndexError):
         sel_rows = []
-    if sel_rows:
-        idx = sel_rows[0]
-        if 0 <= idx < len(shown_verdicts):
-            vsel = shown_verdicts[idx]
+    with detail_box:
+        if sel_rows and 0 <= sel_rows[0] < len(shown_verdicts):
+            vsel = shown_verdicts[sel_rows[0]]
             _, emoji, short = rating_meta(vsel.rating)
-            st.divider()
             st.markdown(f"### {emoji} {disp_name(vsel)} ({vsel.f.ticker}) · {short} · {vsel.total:.0f}점")
             _render_detail(vsel)
-    else:
-        st.caption("💡 위 표에서 종목 행을 클릭해 보세요 — 적정가·매수가·이유·위험까지 바로 펼쳐집니다.")
+            st.divider()
+        else:
+            st.caption("💡 아무 종목이나 클릭해 보세요 — 적정가·매수가·이유·위험까지 바로 펼쳐집니다.")
     if not df.empty:
         st.download_button(
             "⬇️ 표 CSV로 내려받기",
