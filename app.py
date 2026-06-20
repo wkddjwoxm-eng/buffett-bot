@@ -892,6 +892,7 @@ with tab1:
                                key="rank_name", label_visibility="visible")
 
     rows = []
+    shown_verdicts = []   # 표에 보이는 행과 1:1 대응 (행 클릭 → 상세 조언용)
     for i, v in enumerate(verdicts, 1):
         f, m = v.f, v.metrics
         tech = getattr(m, "tech", None)
@@ -907,6 +908,7 @@ with tab1:
         if name_q and name_q.lower() not in nm.lower() and name_q.lower() not in f.ticker.lower():
             continue
 
+        shown_verdicts.append(v)
         mos = v.valuation.get("mos_pct")
         er = v.valuation.get("exp_return")
         per_val = m.norm_per if m.norm_per is not None else f.per
@@ -930,10 +932,11 @@ with tab1:
             "기술신호": tech.label if (tech and tech.news_count > 0) else "—",
         })
 
-    st.caption(f"표시 {len(rows)}개 / 전체 {len(verdicts)}개")
+    st.caption(f"표시 {len(rows)}개 / 전체 {len(verdicts)}개  ·  👆 종목 행을 클릭하면 아래에 상세 조언이 열립니다")
     df = pd.DataFrame(rows)
-    st.dataframe(
+    table_state = st.dataframe(
         df, use_container_width=True, hide_index=True, height=560,
+        on_select="rerun", selection_mode="single-row", key="rank_table",
         column_config={
             "총점": st.column_config.ProgressColumn("총점", min_value=0, max_value=100,
                                                    format="%.0f"),
@@ -947,6 +950,22 @@ with tab1:
             "ROIC": st.column_config.NumberColumn("ROIC%", format="%.0f%%"),
         },
     )
+
+    # ── 행 클릭 → 해당 종목 상세 조언 ──
+    try:
+        sel_rows = table_state["selection"]["rows"]
+    except (KeyError, TypeError, IndexError):
+        sel_rows = []
+    if sel_rows:
+        idx = sel_rows[0]
+        if 0 <= idx < len(shown_verdicts):
+            vsel = shown_verdicts[idx]
+            _, emoji, short = rating_meta(vsel.rating)
+            st.divider()
+            st.markdown(f"### {emoji} {disp_name(vsel)} ({vsel.f.ticker}) · {short} · {vsel.total:.0f}점")
+            _render_detail(vsel)
+    else:
+        st.caption("💡 위 표에서 종목 행을 클릭해 보세요 — 적정가·매수가·이유·위험까지 바로 펼쳐집니다.")
     if not df.empty:
         st.download_button(
             "⬇️ 표 CSV로 내려받기",
