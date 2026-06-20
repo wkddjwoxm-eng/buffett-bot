@@ -59,17 +59,46 @@ def _verdict_to_dict(v: Verdict) -> dict:
     return _clean(d)
 
 
+def _existing_count(path: Path) -> int:
+    """기존 결과 파일의 종목 수(없으면 0)."""
+    if not path.exists():
+        return 0
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return int(payload.get("count") or len(payload.get("verdicts", [])))
+    except Exception:
+        return 0
+
+
 def dump_market(verdicts: list[Verdict], market: str,
-                generated_at: Optional[str] = None) -> Path:
-    """결과를 cache/results_{market}.json 으로 저장."""
+                generated_at: Optional[str] = None,
+                min_keep_ratio: float = 0.6) -> Path:
+    """결과를 cache/results_{market}.json 으로 저장.
+
+    안전장치: 이번 수집이 비정상적으로 적으면(0개거나 기존의 60% 미만)
+    기존 좋은 데이터를 덮어쓰지 않는다. (GitHub Actions IP가 야후에
+    rate-limit 당해 빈 결과가 나오는 사고로부터 데이터를 보호)
+    """
     path = CACHE_DIR / f"results_{market}.json"
+    new_n = len(verdicts)
+    old_n = _existing_count(path)
+
+    if new_n == 0:
+        print(f"  ⛔ [{market}] 수집 0개 — 기존 {old_n}개 데이터 보존(덮어쓰기 취소)")
+        return path
+    if old_n > 0 and new_n < old_n * min_keep_ratio:
+        print(f"  ⛔ [{market}] 수집 {new_n}개 < 기존 {old_n}개의 {int(min_keep_ratio*100)}% "
+              f"— rate-limit 의심, 기존 데이터 보존(덮어쓰기 취소)")
+        return path
+
     payload = {
         "market": market,
         "generated_at": generated_at or _now_kst_str(),
-        "count": len(verdicts),
+        "count": new_n,
         "verdicts": [_verdict_to_dict(v) for v in verdicts],
     }
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    print(f"  ✅ [{market}] {new_n}개 저장 (기존 {old_n}개)")
     return path
 
 

@@ -44,7 +44,8 @@ jobs:
       - name: 전체 종목 사전 분석 (점수·적정가·조언까지 계산)
         env:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
-          PRECOMPUTE_TECH: "1"   # 뉴스(기술변곡점)까지 수집. 끄려면 "0"
+          PRECOMPUTE_TECH: "1"     # 뉴스(기술변곡점)까지 수집. 끄려면 "0"
+          PRECOMPUTE_WORKERS: "8"  # 공유 IP rate-limit 완화 (병렬 낮춤)
         run: python precompute.py all
 
       - name: 결과 파일 커밋 & 푸시 (충돌 시 자동 재시도)

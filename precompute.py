@@ -50,11 +50,13 @@ def collect_market_indicators() -> dict:
 
 # 뉴스(기술변곡점)까지 수집할지 — 환경변수로 끌 수 있음 (속도/요청량 조절)
 FETCH_TECH = os.environ.get("PRECOMPUTE_TECH", "1") != "0"
+# 워커 수 — GitHub Actions 등 rate-limit 잦은 환경에선 낮추면(예 8) 성공률↑
+DEFAULT_WORKERS = int(os.environ.get("PRECOMPUTE_WORKERS", "16"))
 
 _KST = timezone(timedelta(hours=9))
 
 
-def precompute_market(market: str, workers: int = 16) -> int:
+def precompute_market(market: str, workers: int = DEFAULT_WORKERS) -> int:
     tickers = [tk for tk, _, _ in get_universe(market)]
     total = len(tickers)
     print(f"[precompute] {market.upper()} — {total}개 종목 분석 시작 "
