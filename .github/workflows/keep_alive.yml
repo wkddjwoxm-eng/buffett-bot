@@ -1,0 +1,34 @@
+name: 앱 절전 방지 (keep-alive)
+
+on:
+  schedule:
+    # 6시간마다 — Streamlit 무료 플랜의 비활동 절전을 예방
+    - cron: "0 */6 * * *"
+  workflow_dispatch:  # 수동 실행 버튼
+
+# 동시에 하나만
+concurrency:
+  group: keep-alive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Playwright 설치
+        run: |
+          pip install -q playwright
+          python -m playwright install --with-deps chromium
+
+      - name: 앱 깨우기(페이지 로드 + 필요시 wake 버튼 클릭)
+        run: python keep_alive.py
