@@ -147,11 +147,56 @@ button[data-baseweb="tab"] {font-size:1rem; font-weight:600;}
 
 .section-title {font-size:1.25rem; font-weight:800; letter-spacing:-.02em; margin:26px 0 6px;}
 .section-sub {color:#8b95a5; font-size:.88rem; margin-bottom:14px;}
+
+/* ── 상단 브랜드 헤더 ───────────────────────────────── */
+.brand {display:flex; align-items:center; gap:14px; margin:0 0 18px;}
+.brand .logo {
+    font-size:2.1rem; line-height:1;
+    filter: drop-shadow(0 2px 10px rgba(0,255,136,.25));
+}
+.brand .tt {display:flex; flex-direction:column;}
+.brand .name {
+    font-size:1.55rem; font-weight:900; letter-spacing:-.03em; line-height:1.05;
+    background:linear-gradient(120deg,#00ff88 0%,#00d4ff 60%,#a78bfa 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+}
+.brand .slogan {color:#8b95a5; font-size:.82rem; margin-top:2px; letter-spacing:-.01em;}
+.brand .spacer {flex:1;}
+.brand .quote {
+    color:#7c8696; font-size:.78rem; font-style:italic; text-align:right;
+    max-width:280px; line-height:1.45; display:none;
+}
+@media (min-width:900px){ .brand .quote {display:block;} }
+
+/* ── 한눈 요약 칩 (hero 안) ─────────────────────────── */
+.mini-pills {display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;}
+.mini-pill {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:5px 12px; border-radius:999px; font-size:.82rem; font-weight:700;
+    border:1px solid rgba(255,255,255,.1);
+}
+.mini-pill.buy   {background:rgba(0,255,136,.12); color:#34f5a0; border-color:rgba(0,255,136,.35);}
+.mini-pill.wait  {background:rgba(255,196,0,.10); color:#ffce4d; border-color:rgba(255,196,0,.32);}
+.mini-pill.avoid {background:rgba(255,75,75,.10); color:#ff7a7a; border-color:rgba(255,75,75,.3);}
+.mini-pill.er    {background:rgba(0,212,255,.10); color:#7cd6ff; border-color:rgba(0,212,255,.3);}
 </style>
 """, unsafe_allow_html=True)
 
 if _bg_css:
     st.markdown(f"<style>{_bg_css}</style>", unsafe_allow_html=True)
+
+# ── 상단 브랜드 헤더 ───────────────────────────────────────────────────────
+st.markdown("""
+<div class="brand">
+  <div class="logo">🎩</div>
+  <div class="tt">
+    <div class="name">버핏 봇</div>
+    <div class="slogan">워런 버핏식 장기 가치투자 스크리너 · 국장 + 미장</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="quote">“훌륭한 기업을 적당한 가격에 사는 것이<br>적당한 기업을 헐값에 사는 것보다 낫다.”</div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -747,19 +792,27 @@ _rate_card = (
 
 _ts = st.session_state.get("data_ts") or _data_timestamp()
 
+_er_pill = (f'<span class="mini-pill er">📈 평균 기대수익 {avg_er:.0f}%</span>'
+            if avg_er is not None else "")
 st.markdown(f"""
 <div class="hero">
   <h1>📊 분석 결과</h1>
   <p>{n}개 종목을 버핏 잣대로 채점했습니다. {'강력 매수 ' + str(len(strong)) + '종목 발견!' if strong else '오늘은 강력 매수 등급이 없습니다 — 정상입니다.'}</p>
-  <span class="tag">🕗 {_ts}</span>
+  <div class="mini-pills">
+    <span class="mini-pill buy">✅ 지금 매수 {len(buys)}</span>
+    <span class="mini-pill wait">⏳ 목표가 대기 {len(waits)}</span>
+    <span class="mini-pill avoid">🚫 회피 {len(avoids)}</span>
+    {_er_pill}
+  </div>
+  <span class="tag" style="margin-top:12px">🕗 {_ts}</span>
 </div>
 <div class="kpi-row">
-  <div class="kpi-card temp"><div class="num">{temp}</div><div class="lbl">공포·탐욕 지수 (0=공포 · 100=탐욕)</div></div>
+  <div class="kpi-card temp"><div class="num">{temp}</div><div class="lbl">😱 공포·탐욕 지수</div></div>
   <div class="kpi-card">
-    <div class="num"><span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_usd_str}</span><br><span style='font-size:.72rem;color:#8b95a5'>달러 / 원</span></div>
-    <div class="lbl" style="margin-top:8px"><span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_jpy_str}</span><br><span style='font-size:.72rem;color:#8b95a5'>100엔 / 원</span></div>
+    <div class="num"><span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_usd_str}</span><br><span style='font-size:.72rem;color:#8b95a5'>💵 달러 / 원</span></div>
+    <div class="lbl" style="margin-top:8px"><span style='font-size:1.5rem;font-weight:800;color:#e2e8f0'>{_jpy_str}</span><br><span style='font-size:.72rem;color:#8b95a5'>💴 100엔 / 원</span></div>
   </div>
-  <div class="kpi-card"><div class="num">{_rate_card}</div></div>
+  <div class="kpi-card"><div class="num">🏦 {_rate_card}</div></div>
 </div>
 """, unsafe_allow_html=True)
 
