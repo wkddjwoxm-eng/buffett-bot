@@ -386,6 +386,7 @@ def _render_detail(v):
         st.success(f"👉 {_one_liner(v)}")
 
 
+@st.cache_data(show_spinner=False)
 def ticker_sector_map() -> dict:
     from universe import KR_UNIVERSE, US_UNIVERSE
     m = {}
@@ -396,6 +397,7 @@ def ticker_sector_map() -> dict:
     return m
 
 
+@st.cache_data(show_spinner=False)
 def ticker_name_map() -> dict:
     """ticker → 한글(또는 표시용) 이름 맵. universe + search_db 통합."""
     m = {}
@@ -809,9 +811,13 @@ _ts = st.session_state.get("data_ts") or _data_timestamp()
 
 _er_pill = (f'<span class="mini-pill er">📈 평균 기대수익 {avg_er:.0f}%</span>'
             if avg_er is not None else "")
+_mkt_badge = ""
+_rs_now = st.session_state.get("result_source", "")
+if _rs_now == "auto:kr":   _mkt_badge = "🇰🇷 국장 "
+elif _rs_now == "auto:us": _mkt_badge = "🇺🇸 미장 "
 st.markdown(f"""
 <div class="hero">
-  <h1>📊 분석 결과</h1>
+  <h1>📊 {_mkt_badge}분석 결과</h1>
   <p>{n}개 종목을 버핏 잣대로 채점했습니다. {'강력 매수 ' + str(len(strong)) + '종목 발견!' if strong else '오늘은 강력 매수 등급이 없습니다 — 정상입니다.'}</p>
   <div class="mini-pills">
     <span class="mini-pill buy">✅ 지금 매수 {len(buys)}</span>
