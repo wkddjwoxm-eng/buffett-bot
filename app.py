@@ -932,15 +932,26 @@ with tab1:
             "기술신호": tech.label if (tech and tech.news_count > 0) else "—",
         })
 
-    st.caption(f"표시 {len(rows)}개 / 전체 {len(verdicts)}개  ·  👆 표에서 종목을 **한 번 클릭**하면 상세 조언이 바로 위에 열립니다")
+    st.caption(f"표시 {len(rows)}개 / 전체 {len(verdicts)}개")
 
-    # 상세 조언이 표 '위'에 뜨도록 미리 자리를 잡아둔다
-    detail_box = st.container()
+    # ── 상세 조언 볼 종목 선택 (체크박스 없이 한 번에) ──
+    name_to_v = {f"{disp_name(v)} ({v.f.ticker})": v for v in shown_verdicts}
+    picked = st.selectbox(
+        "📋 상세 조언 볼 종목 선택 (이름 입력으로 검색 가능)",
+        options=["— 선택 안 함 —"] + list(name_to_v.keys()),
+        index=0,
+        key="rank_pick",
+    )
+    if picked and picked != "— 선택 안 함 —":
+        vsel = name_to_v[picked]
+        _, emoji, short = rating_meta(vsel.rating)
+        st.markdown(f"### {emoji} {disp_name(vsel)} ({vsel.f.ticker}) · {short} · {vsel.total:.0f}점")
+        _render_detail(vsel)
+        st.divider()
 
     df = pd.DataFrame(rows)
-    table_state = st.dataframe(
+    st.dataframe(
         df, use_container_width=True, hide_index=True, height=560,
-        on_select="rerun", selection_mode="single-row", key="rank_table",
         column_config={
             "총점": st.column_config.ProgressColumn("총점", min_value=0, max_value=100,
                                                    format="%.0f"),
@@ -954,21 +965,6 @@ with tab1:
             "ROIC": st.column_config.NumberColumn("ROIC%", format="%.0f%%"),
         },
     )
-
-    # ── 행 클릭 → 해당 종목 상세 조언 (표 위 컨테이너에 렌더) ──
-    try:
-        sel_rows = table_state["selection"]["rows"]
-    except (KeyError, TypeError, IndexError):
-        sel_rows = []
-    with detail_box:
-        if sel_rows and 0 <= sel_rows[0] < len(shown_verdicts):
-            vsel = shown_verdicts[sel_rows[0]]
-            _, emoji, short = rating_meta(vsel.rating)
-            st.markdown(f"### {emoji} {disp_name(vsel)} ({vsel.f.ticker}) · {short} · {vsel.total:.0f}점")
-            _render_detail(vsel)
-            st.divider()
-        else:
-            st.caption("💡 아무 종목이나 클릭해 보세요 — 적정가·매수가·이유·위험까지 바로 펼쳐집니다.")
     if not df.empty:
         st.download_button(
             "⬇️ 표 CSV로 내려받기",
