@@ -8,3 +8,6 @@ cache/*
 watchlist.json
 .env
 .streamlit/secrets.toml
+
+.DS_Store
+**/.DS_Store
