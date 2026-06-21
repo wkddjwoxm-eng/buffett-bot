@@ -837,6 +837,27 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# ── 오늘의 결론 한 줄 (가장 중요한 액션 메시지) ────────────────────────────
+_mkt_kor = "국장" if _is_us is False else "미장"
+if strong:
+    best = max(strong, key=lambda v: (v.valuation.get("exp_return") or -9, v.total))
+    _be = best.valuation.get("exp_return")
+    _bm = best.valuation.get("mos_pct")
+    _extra = []
+    if _bm is not None: _extra.append(f"안전마진 {_bm*100:+.0f}%")
+    if _be is not None: _extra.append(f"기대수익 {_be*100:.0f}%")
+    _ex = f" ({' · '.join(_extra)})" if _extra else ""
+    st.success(f"##### 🟢 오늘의 결론 — 지금 사도 좋은 종목 **{len(buys)}개**, "
+               f"그중 1순위는 **{disp_name(best)}**{_ex}. 아래 카드에서 근거 확인.")
+elif buys:
+    st.success(f"##### 🟢 오늘의 결론 — 안전마진을 주는 매수 후보 **{len(buys)}개** 발견. "
+               f"강력 등급은 없지만 선별 매수 가능 구간.")
+elif waits:
+    st.warning(f"##### 🟡 오늘의 결론 — 지금 {_mkt_kor}은 **살 만한 가격이 아님**. "
+               f"우량주 **{len(waits)}개**가 '목표가 대기' 중 — 더 빠지면 기회. (버핏: 기다림도 전략)")
+else:
+    st.error(f"##### 🔴 오늘의 결론 — 기준을 통과하는 매수·대기 후보가 없음. 현금 보유 우위.")
+
 # ── 스포트라이트: 강력매수 또는 톱픽 ──────────────────────────────────────
 spotlight = strong if strong else buys
 title = "🚀 강력 매수 후보" if strong else "✅ 지금 사도 좋은 후보 (Top 3)"
