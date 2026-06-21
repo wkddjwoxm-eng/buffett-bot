@@ -496,10 +496,10 @@ else:
             use_cache = st.toggle("당일 캐시 사용", value=True)
             fetch_tech = st.toggle("기술변곡점 뉴스", value=True)
         with col_opt3:
-            run_btn = st.button("🔍 분석 시작", type="primary", use_container_width=True)
+            run_btn = st.button("🔍 분석 시작", type="primary", width="stretch")
             c1, c2 = st.columns(2)
-            watch_btn = c1.button("💾 저장", use_container_width=True)
-            check_btn = c2.button("🔔 점검", use_container_width=True)
+            watch_btn = c1.button("💾 저장", width="stretch")
+            check_btn = c2.button("🔔 점검", width="stretch")
 
 st.caption("⚠️ 교육·연구용 참고 도구. 투자 책임은 본인에게 있습니다.")
 
@@ -854,7 +854,7 @@ if spotlight:
             key = f"spot_detail_{v.f.ticker}"
             is_open = st.session_state.get(key, False)
             btn_label = "▲ 상세 조언 닫기" if is_open else "📋 상세 조언 보기"
-            if st.button(btn_label, key=f"btn_{v.f.ticker}", use_container_width=True):
+            if st.button(btn_label, key=f"btn_{v.f.ticker}", width="stretch"):
                 st.session_state[key] = not is_open
                 st.rerun()
 
@@ -951,7 +951,7 @@ with tab1:
 
     df = pd.DataFrame(rows)
     st.dataframe(
-        df, use_container_width=True, hide_index=True, height=560,
+        df, width="stretch", hide_index=True, height=560,
         column_config={
             "총점": st.column_config.ProgressColumn("총점", min_value=0, max_value=100,
                                                    format="%.0f"),
@@ -1004,13 +1004,13 @@ with tab2:
     sec_rows.sort(key=lambda x: -x["평균 품질"])
     sec_df = pd.DataFrame(sec_rows)
     st.dataframe(
-        sec_df, use_container_width=True, hide_index=True,
+        sec_df, width="stretch", hide_index=True,
         column_config={
             "평균 품질": st.column_config.ProgressColumn("평균 품질", min_value=0,
                                                       max_value=75, format="%.0f"),
         },
     )
-    st.bar_chart(sec_df.set_index("섹터")[["평균 품질", "평균 총점"]], use_container_width=True)
+    st.bar_chart(sec_df.set_index("섹터")[["평균 품질", "평균 총점"]], width="stretch")
 
 # Tab3: 포트폴리오
 with tab3:
@@ -1047,7 +1047,7 @@ with tab3:
             "현재가→적정가": f"{money(v.f.price, v.f.currency)} → {money(v.valuation.get('fair'), v.f.currency)}",
         } for v, a in zip(top_buys, alloc)]
         st.dataframe(
-            pd.DataFrame(alloc_rows), use_container_width=True, hide_index=True,
+            pd.DataFrame(alloc_rows), width="stretch", hide_index=True,
             column_config={
                 "비중": st.column_config.ProgressColumn("추천 비중%", min_value=0,
                                                        max_value=30, format="%.0f%%"),
@@ -1096,7 +1096,7 @@ with tab3:
             "남이 탐욕스러울 때 두려워하고, 두려워할 때 욕심내라.")
 
     st.divider()
-    if watch_btn or st.button("💾 '대기' 종목 목표가 워치리스트 저장", use_container_width=True):
+    if watch_btn or st.button("💾 '대기' 종목 목표가 워치리스트 저장", width="stretch"):
         import watchlist as wl
         cnt = wl.add_from_verdicts(verdicts)
         st.success(f"✅ '대기' 종목 {cnt}개를 워치리스트에 저장했습니다. "
