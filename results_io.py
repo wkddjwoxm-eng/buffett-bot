@@ -91,15 +91,37 @@ def dump_market(verdicts: list[Verdict], market: str,
               f"— rate-limit 의심, 기존 데이터 보존(덮어쓰기 취소)")
         return path
 
+    import time as _time
     payload = {
         "market": market,
         "generated_at": generated_at or _now_kst_str(),
+        "generated_epoch": _time.time(),   # 신선도 계산용(기계 판독)
         "count": new_n,
         "verdicts": [_verdict_to_dict(v) for v in verdicts],
     }
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     print(f"  ✅ [{market}] {new_n}개 저장 (기존 {old_n}개)")
     return path
+
+
+def market_age_hours(market: str) -> Optional[float]:
+    """결과 파일이 마지막으로 갱신된 후 경과 시간(시간 단위). 없으면 None."""
+    import time as _time
+    path = CACHE_DIR / f"results_{market}.json"
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        epoch = payload.get("generated_epoch")
+        if epoch:
+            return max(0.0, (_time.time() - float(epoch)) / 3600.0)
+    except Exception:
+        pass
+    # epoch 없으면 파일 mtime으로 추정
+    try:
+        return max(0.0, (_time.time() - path.stat().st_mtime) / 3600.0)
+    except Exception:
+        return None
 
 
 def _filter(cls, d: dict) -> dict:

@@ -815,6 +815,18 @@ _mkt_badge = ""
 _rs_now = st.session_state.get("result_source", "")
 if _rs_now == "auto:kr":   _mkt_badge = "🇰🇷 국장 "
 elif _rs_now == "auto:us": _mkt_badge = "🇺🇸 미장 "
+
+# ── 데이터 신선도 점검 (자동 수집 모드만) ──────────────────────────────────
+if _rs_now in ("auto:kr", "auto:us"):
+    try:
+        import results_io as _rio
+        _age = _rio.market_age_hours(_rs_now.split(":")[1])
+        if _age is not None and _age > 30:   # 하루 2회(12h) 기준 2회 이상 누락
+            _days = _age / 24
+            st.warning(f"⚠️ 데이터가 약 **{_days:.1f}일 전** 기준입니다 — 최근 자동 수집이 지연됐을 수 있어요. "
+                       f"수치는 마지막 정상 수집 시점 기준이며, 곧 자동 갱신됩니다.")
+    except Exception:
+        pass
 st.markdown(f"""
 <div class="hero">
   <h1>📊 {_mkt_badge}분석 결과</h1>
