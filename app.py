@@ -179,6 +179,29 @@ button[data-baseweb="tab"] {font-size:1rem; font-weight:600;}
 .mini-pill.wait  {background:rgba(255,196,0,.10); color:#ffce4d; border-color:rgba(255,196,0,.32);}
 .mini-pill.avoid {background:rgba(255,75,75,.10); color:#ff7a7a; border-color:rgba(255,75,75,.3);}
 .mini-pill.er    {background:rgba(0,212,255,.10); color:#7cd6ff; border-color:rgba(0,212,255,.3);}
+
+/* ── 점수 breakdown 막대 ─────────────────────────────── */
+.sbreak {margin:6px 0 2px;}
+.srow {display:flex; align-items:center; gap:10px; margin:7px 0;}
+.srow .slabel {flex:0 0 92px; font-size:.8rem; color:#cbd5e1;}
+.srow .strack {flex:1; height:11px; border-radius:6px; background:rgba(255,255,255,.07); overflow:hidden;}
+.srow .sfill {height:100%; border-radius:6px;}
+.srow .sval {flex:0 0 56px; text-align:right; font-size:.8rem; font-weight:700; color:#e2e8f0;}
+
+/* ── 밸류에이션 범위 바 ─────────────────────────────── */
+.vrange {margin:10px 0 4px;}
+.vtrack {position:relative; height:16px; border-radius:8px; overflow:hidden;
+    background:linear-gradient(to right,
+        rgba(0,255,136,.45) 0%, rgba(0,255,136,.30) var(--buy),
+        rgba(255,196,0,.30) var(--buy), rgba(255,196,0,.25) var(--fair),
+        rgba(255,75,75,.30) var(--fair), rgba(255,75,75,.35) 100%);}
+.vmark {position:absolute; top:-4px; width:2px; height:24px;}
+.vmark.price {background:#ffffff; box-shadow:0 0 6px rgba(255,255,255,.8);}
+.vmark.fair  {background:#9aa4b2;}
+.vmark.buy   {background:#34f5a0;}
+.vlabels {display:flex; justify-content:space-between; font-size:.68rem; color:#7c8696; margin-top:6px;}
+.vlegend {display:flex; gap:14px; font-size:.72rem; color:#9aa4b2; margin-top:8px; flex-wrap:wrap;}
+.vlegend b {color:#e2e8f0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -271,6 +294,69 @@ def pick_card_html(v, rank: int, sec_map: dict, stars: str, display_name: str = 
 """
 
 
+def _score_breakdown_html(f, m) -> str:
+    """버핏 100점이 4기둥 어디서 왔는지 막대로 시각화 (보존된 f로 즉석 재계산)."""
+    import buffett as _bf
+    try:
+        p, _ = _bf.score_profitability(f, m.roic)
+        s, _ = _bf.score_strength(f)
+        g, _ = _bf.score_growth(f)
+        va, _ = _bf.score_valuation(f, m.norm_per, m.cyclical)
+    except Exception:
+        return ""
+    pillars = [
+        ("수익성·해자", p, 30, "#00ff88"),
+        ("재무안정",   s, 25, "#00d4ff"),
+        ("성장성",     g, 20, "#a78bfa"),
+        ("밸류에이션", va, 25, "#ffce4d"),
+    ]
+    rows = ""
+    for label, sc, mx, col in pillars:
+        pct = max(0, min(100, sc / mx * 100))
+        rows += (f'<div class="srow"><span class="slabel">{label}</span>'
+                 f'<div class="strack"><div class="sfill" style="width:{pct:.0f}%;'
+                 f'background:{col}"></div></div>'
+                 f'<span class="sval">{sc:.0f}/{mx}</span></div>')
+    return f'<div class="sbreak">{rows}</div>'
+
+
+def _valuation_range_html(f, val) -> str:
+    """약세~강세 내재가치 범위에서 현재가·적정가·매수가 위치를 한눈에."""
+    sc = val.get("scenarios") or {}
+    bear, bull = sc.get("bear"), sc.get("bull")
+    price, fair, buy = f.price, val.get("fair"), val.get("buy_below")
+    if not all(isinstance(x, (int, float)) and x > 0 for x in (bear, bull, price)):
+        return ""
+    fair = fair or (bear + bull) / 2
+    buy = buy or fair * 0.75
+    lo = min(bear, buy, price) * 0.97
+    hi = max(bull, price, fair) * 1.03
+    span = (hi - lo) or 1
+    def pos(x):
+        return max(0, min(100, (x - lo) / span * 100))
+    p_price, p_fair, p_buy = pos(price), pos(fair), pos(buy)
+    cur = f.currency
+    fmt = lambda x: money(x, cur)
+    cheap = price <= (buy or 0)
+    verdict = ("🟢 안전마진 구간 (싸다)" if cheap else
+               ("🟡 적정~약간 비쌈" if price <= (fair or 0) else "🔴 적정가치 위 (비싸다)"))
+    return (
+        f'<div class="vrange">'
+        f'<div class="vtrack" style="--buy:{p_buy:.0f}%; --fair:{p_fair:.0f}%">'
+        f'<div class="vmark buy" style="left:{p_buy:.0f}%"></div>'
+        f'<div class="vmark fair" style="left:{p_fair:.0f}%"></div>'
+        f'<div class="vmark price" style="left:{p_price:.0f}%"></div>'
+        f'</div>'
+        f'<div class="vlabels"><span>🐻 {fmt(bear)}</span><span>🐂 {fmt(bull)}</span></div>'
+        f'<div class="vlegend">'
+        f'<span>🟢 매수권장 <b>{fmt(buy)}</b></span>'
+        f'<span>⚪ 적정가 <b>{fmt(fair)}</b></span>'
+        f'<span>⬜ 현재가 <b>{fmt(price)}</b></span>'
+        f'<span>→ {verdict}</span>'
+        f'</div></div>'
+    )
+
+
 def _render_detail(v):
     """종목 상세 조언 블록 (스포트라이트 카드 클릭 + Tab4에서 공용)."""
     from advisor import _one_liner, _sector_context, _metric_narrative
@@ -295,6 +381,12 @@ def _render_detail(v):
 
         st.divider()
 
+        # ── 버핏 점수 breakdown (100점이 어디서 왔나) ──
+        sb = _score_breakdown_html(f, m)
+        if sb:
+            st.markdown(f"#### 🏆 버핏 점수 구성 — 품질 {v.quality:.0f}/75 + 가격 {v.value:.0f}/25 = **{v.total:.0f}/100**")
+            st.markdown(sb, unsafe_allow_html=True)
+
         # ── KPI 수치 ──
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("총점", f"{v.total:.0f} / 100")
@@ -313,7 +405,7 @@ def _render_detail(v):
                   delta_color="normal" if (mos or 0) > 0 else "inverse")
         c5.metric("기대 연수익률", f"{er*100:.0f}%" if er is not None else "—")
 
-        # ── 시나리오 DCF ──
+        # ── 시나리오 DCF + 밸류에이션 범위 시각화 ──
         sc = val.get("scenarios", {})
         if sc:
             st.divider()
@@ -321,6 +413,10 @@ def _render_detail(v):
             d1.metric("🐻 약세 시나리오", fmt(sc.get("bear")))
             d2.metric("📊 기본 시나리오", fmt(sc.get("base")))
             d3.metric("🐂 강세 시나리오", fmt(sc.get("bull")))
+            vr = _valuation_range_html(f, val)
+            if vr:
+                st.markdown("##### 📍 지금 가격은 어디쯤? (내재가치 범위 內 현재가 위치)")
+                st.markdown(vr, unsafe_allow_html=True)
             st.caption(f"💰 매수 권장가 **{fmt(val.get('buy_below'))}** 이하 (안전마진 25%)")
 
         # ── 역DCF ──
