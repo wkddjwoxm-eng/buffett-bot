@@ -629,7 +629,11 @@ def run_analysis(tickers: list[str], use_cache: bool, fetch_tech: bool):
     from datafetch import fetch
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    # 중복 제거 + 빈 입력 방어 (0 division·빈 화면 예방)
+    tickers = list(dict.fromkeys(t for t in tickers if t))
     total = len(tickers)
+    if total == 0:
+        return []
     bar = st.progress(0.0, text=f"병렬 데이터 수집 중… (0/{total})")
     status = st.empty()
 
