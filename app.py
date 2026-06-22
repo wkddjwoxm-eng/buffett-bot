@@ -398,6 +398,67 @@ def _valuation_range_html(f, val) -> str:
     )
 
 
+def _valuation_reliability_note(v) -> str | None:
+    """적정가 추정이 극단 구간이면 정밀도 한계를 정직하게 안내(데이터/버블 무관)."""
+    val, f = v.valuation, v.f
+    mos = val.get("mos_pct")
+    fair, price = val.get("fair"), f.price
+    if not (fair and price and price > 0):
+        return None
+    if mos is not None and mos < -2.0:        # 현재가 ≥ 적정가 3배
+        mult = price / fair
+        return (f"현재가가 추정 적정가의 약 **{mult:.0f}배**입니다. 극단적 고평가 구간에서는 "
+                f"DCF 적정가 *수치*의 정밀도가 낮으니, 정확한 적정가보다 **등급(회피/관망)**과 "
+                f"방향성만 참고하세요. (고PER 성장·사이클주에서 흔함)")
+    if mos is not None and mos > 0.85:        # 적정가 ≥ 현재가 6.7배
+        return (f"추정 적정가가 현재가의 **{fair/price:.0f}배**로 비정상적으로 높습니다 — "
+                f"일회성 이익·주식수/통화 데이터 오류 가능. 원문(국장 DART·미장 SEC) 확인을 권합니다.")
+    return None
+
+
+def _peer_context_lines(v) -> list[str]:
+    """동종업계(같은 섹터) 중앙값 대비 PER·ROE·ROIC 위치를 한 줄씩."""
+    import statistics
+    verdicts = st.session_state.get("verdicts", [])
+    sec_map = st.session_state.get("sec_map", {})
+    sec = sec_map.get(v.f.ticker, v.f.sector)
+    peers = [p for p in verdicts if sec_map.get(p.f.ticker, p.f.sector) == sec]
+    if len(peers) < 4:
+        return []
+
+    def med(getter):
+        xs = [g for g in (getter(p) for p in peers) if g is not None and g > 0]
+        return statistics.median(xs) if len(xs) >= 4 else None
+
+    def cmp_word(x, m, lower_better):
+        if x is None or m is None:
+            return None
+        ratio = x / m
+        if 0.9 <= ratio <= 1.1:
+            return "비슷"
+        if lower_better:
+            return "저렴" if x < m else "비쌈"
+        return "우수" if x > m else "열위"
+
+    lines = []
+    per_v = v.metrics.norm_per if v.metrics.norm_per is not None else v.f.per
+    per_m = med(lambda p: (p.metrics.norm_per if p.metrics.norm_per is not None else p.f.per))
+    w = cmp_word(per_v, per_m, lower_better=True)
+    if w:
+        lines.append(f"**PER** {per_v:.1f}배 vs 섹터 중앙값 {per_m:.1f}배 → **{w}**")
+    roe_m = med(lambda p: (p.f.roe * 100 if p.f.roe is not None else None))
+    if v.f.roe is not None:
+        w = cmp_word(v.f.roe * 100, roe_m, lower_better=False)
+        if w:
+            lines.append(f"**ROE** {v.f.roe*100:.0f}% vs 섹터 중앙값 {roe_m:.0f}% → **{w}**")
+    roic_m = med(lambda p: (p.metrics.roic * 100 if p.metrics.roic is not None else None))
+    if v.metrics.roic is not None:
+        w = cmp_word(v.metrics.roic * 100, roic_m, lower_better=False)
+        if w:
+            lines.append(f"**ROIC** {v.metrics.roic*100:.0f}% vs 섹터 중앙값 {roic_m:.0f}% → **{w}**")
+    return lines
+
+
 def _render_detail(v):
     """종목 상세 조언 블록 (스포트라이트 카드 클릭 + Tab4에서 공용)."""
     from advisor import _one_liner, _sector_context, _metric_narrative
@@ -422,6 +483,14 @@ def _render_detail(v):
 
         st.divider()
 
+        # ── 동종업계 대비 위치 ──
+        peer_lines = _peer_context_lines(v)
+        if peer_lines:
+            sec_nm = st.session_state.get("sec_map", {}).get(f.ticker, f.sector)
+            st.markdown(f"#### 🏷️ 동종업계({sec_nm}) 대비")
+            for ln in peer_lines:
+                st.markdown(f"- {ln}")
+
         # ── 버핏 점수 breakdown (100점이 어디서 왔나) ──
         sb = _score_breakdown_html(f, m)
         if sb:
@@ -445,6 +514,11 @@ def _render_detail(v):
                   delta=("싸다" if (mos or 0) > 0 else "비싸다"),
                   delta_color="normal" if (mos or 0) > 0 else "inverse")
         c5.metric("기대 연수익률", f"{er*100:.0f}%" if er is not None else "—")
+
+        # ── 적정가 신뢰도 경고 (극단 구간) ──
+        rel_note = _valuation_reliability_note(v)
+        if rel_note:
+            st.warning(f"⚠️ **적정가 추정 주의** — {rel_note}")
 
         # ── 시나리오 DCF + 밸류에이션 범위 시각화 ──
         sc = val.get("scenarios", {})
