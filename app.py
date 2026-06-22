@@ -203,6 +203,16 @@ button[data-baseweb="tab"] {font-size:1rem; font-weight:600;}
 .vlegend {display:flex; gap:14px; font-size:.72rem; color:#9aa4b2; margin-top:8px; flex-wrap:wrap;}
 .vlegend b {color:#e2e8f0;}
 
+/* ── 섹터 히트맵 ─────────────────────────────────────── */
+.heatgrid {display:flex; flex-wrap:wrap; gap:10px; margin:6px 0 4px;}
+.heattile {
+    flex:1 1 130px; min-width:120px; border-radius:13px; padding:12px 14px;
+    border:1px solid rgba(255,255,255,.10);
+}
+.heattile .hs {font-size:.92rem; font-weight:800; color:#f1f5f9; letter-spacing:-.01em;}
+.heattile .hm {font-size:1.35rem; font-weight:800; margin-top:4px; letter-spacing:-.02em;}
+.heattile .hq {font-size:.72rem; color:#cbd5e1; margin-top:3px;}
+
 /* ── 모바일 최적화 ───────────────────────────────────── */
 @media (max-width:640px){
     .hero {padding:20px 18px; border-radius:16px;}
@@ -459,8 +469,12 @@ def _peer_context_lines(v) -> list[str]:
     return lines
 
 
-def _render_detail(v):
-    """종목 상세 조언 블록 (스포트라이트 카드 클릭 + Tab4에서 공용)."""
+def _render_detail(v, show_memo: bool = False):
+    """종목 상세 조언 블록 (스포트라이트 카드 클릭 + Tab4에서 공용).
+
+    show_memo=True 는 '종목 선택' 경로(한 번에 1개만 렌더)에서만 켠다.
+    여러 곳에서 동시 렌더되면 text_area key가 충돌하므로 기본은 False.
+    """
     from advisor import _one_liner, _sector_context, _metric_narrative
     f, m, val = v.f, v.metrics, v.valuation
     cur = f.currency
@@ -595,6 +609,22 @@ def _render_detail(v):
         # ── 최종 한 줄 조언 ──
         st.divider()
         st.success(f"👉 {_one_liner(v)}")
+
+        # ── 내 투자 메모 (이 브라우저 세션에 저장) ──
+        if show_memo:
+            memos = st.session_state.setdefault("memos", {})
+            tk = f.ticker
+            note = st.text_area(
+                "📝 내 투자 메모 (이 종목에 대한 생각·매수 조건 등 — 세션 저장)",
+                value=memos.get(tk, ""),
+                key=f"memo_input_{tk}",
+                placeholder="예: 105달러 아래로 오면 1차 매수, 클라우드 성장률 둔화 주시…",
+                height=90,
+            )
+            if note != memos.get(tk, ""):
+                memos[tk] = note
+            if note.strip():
+                st.caption("✅ 메모가 이 세션에 저장됐습니다.")
 
 
 @st.cache_data(show_spinner=False)
@@ -1204,7 +1234,7 @@ with tab1:
         vsel = name_to_v[picked]
         _, emoji, short = rating_meta(vsel.rating)
         st.markdown(f"### {emoji} {disp_name(vsel)} ({vsel.f.ticker}) · {short} · {vsel.total:.0f}점")
-        _render_detail(vsel)
+        _render_detail(vsel, show_memo=True)
         st.divider()
 
     df = pd.DataFrame(rows)
@@ -1279,6 +1309,30 @@ with tab2:
     if cheapest and cheapest["평균 안전마진"] > 0:
         st.success(f"💡 지금 가장 **저평가된 섹터는 ‘{cheapest['섹터']}’** "
                    f"(평균 안전마진 {cheapest['평균 안전마진']:+.0f}%, 매수후보 {cheapest['매수후보']}개)")
+
+    # ── 저평가 히트맵 (초록=쌈 / 빨강=비쌈) ──
+    def _heat_color(mos):
+        if mos is None:
+            return "rgba(255,255,255,.04)"
+        t = max(-60.0, min(40.0, mos))          # -60%~+40% 클램프
+        if t >= 0:
+            a = 0.18 + 0.32 * (t / 40)           # 초록 강도
+            return f"rgba(0,255,136,{a:.2f})"
+        a = 0.15 + 0.30 * (-t / 60)              # 빨강 강도
+        return f"rgba(255,75,75,{a:.2f})"
+    tiles = ""
+    for r in sorted(sec_rows, key=lambda x: (x["평균 안전마진"] if x["평균 안전마진"] is not None else -999), reverse=True):
+        mos = r["평균 안전마진"]
+        mos_txt = f"{mos:+.0f}%" if mos is not None else "—"
+        col = "#34f5a0" if (mos or -1) >= 0 else "#ff9a9a"
+        tiles += (f'<div class="heattile" style="background:{_heat_color(mos)}">'
+                  f'<div class="hs">{r["섹터"]}</div>'
+                  f'<div class="hm" style="color:{col}">{mos_txt}</div>'
+                  f'<div class="hq">품질 {r["평균 품질"]:.0f}/75 · 매수 {r["매수후보"]}개 · {r["종목수"]}종목</div>'
+                  f'</div>')
+    st.markdown("##### 🗺️ 섹터 저평가 히트맵 — 평균 안전마진 (🟢 쌈 · 🔴 비쌈)")
+    st.markdown(f'<div class="heatgrid">{tiles}</div>', unsafe_allow_html=True)
+    st.caption("")
 
     sec_df = pd.DataFrame(sec_rows)
     st.dataframe(
