@@ -1003,7 +1003,8 @@ else:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── 탭 ────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["🏆 전체 랭킹", "🏭 섹터 진단", "💼 포트폴리오", "📋 상세 조언"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["🏆 전체 랭킹", "🏭 섹터 진단", "💼 포트폴리오", "📋 상세 조언", "⚖️ 종목 비교"])
 
 # Tab1: 랭킹
 with tab1:
@@ -1245,6 +1246,80 @@ with tab4:
         with st.expander(f"{emoji} {disp_name(v)} ({v.f.ticker})  ·  {short}  ·  {v.total:.0f}점",
                          expanded=(idx == 0)):
             _render_detail(v)
+
+# Tab5: 종목 비교
+with tab5:
+    st.markdown('<div class="section-sub">2~4개 종목을 나란히 비교 — 각 지표의 우승자에 ⭐</div>',
+                unsafe_allow_html=True)
+    _name_to_v = {f"{disp_name(v)} ({v.f.ticker})": v for v in verdicts}
+    _default = list(_name_to_v.keys())[:2]
+    picks = st.multiselect("비교할 종목 (2~4개)", options=list(_name_to_v.keys()),
+                           default=_default, max_selections=4, key="cmp_pick")
+    cmp_vs = [_name_to_v[p] for p in picks]
+
+    if len(cmp_vs) < 2:
+        st.info("종목을 **2개 이상** 선택하면 나란히 비교합니다.")
+    else:
+        import buffett as _bf
+
+        def _pillars(v):
+            f, m = v.f, v.metrics
+            try:
+                return (_bf.score_profitability(f, m.roic)[0], _bf.score_strength(f)[0],
+                        _bf.score_growth(f)[0], _bf.score_valuation(f, m.norm_per, m.cyclical)[0])
+            except Exception:
+                return (None, None, None, None)
+
+        # (라벨, 값추출, 높을수록좋음, 포맷)
+        def _per(v):
+            pv = v.metrics.norm_per if v.metrics.norm_per is not None else v.f.per
+            return pv if (pv and pv > 0) else None
+        specs = [
+            ("총점 /100",   lambda v: round(v.total, 1),                         True,  lambda x: f"{x:.0f}"),
+            ("품질 /75",    lambda v: round(v.quality, 1),                       True,  lambda x: f"{x:.0f}"),
+            ("가격점수 /25", lambda v: round(v.value, 1),                         True,  lambda x: f"{x:.0f}"),
+            ("PER",        _per,                                                False, lambda x: f"{x:.1f}배"),
+            ("PBR",        lambda v: v.f.pbr if (v.f.pbr and v.f.pbr > 0) else None, False, lambda x: f"{x:.1f}배"),
+            ("ROE%",       lambda v: v.f.roe * 100 if v.f.roe is not None else None, True, lambda x: f"{x:.0f}%"),
+            ("ROIC%",      lambda v: v.metrics.roic * 100 if v.metrics.roic is not None else None, True, lambda x: f"{x:.0f}%"),
+            ("배당%",       lambda v: getattr(v.f, "dividend_yield", None) and v.f.dividend_yield * 100, True, lambda x: f"{x:.1f}%"),
+            ("안전마진%",   lambda v: v.valuation.get("mos_pct") and v.valuation["mos_pct"] * 100, True, lambda x: f"{x:+.0f}%"),
+            ("기대수익%",   lambda v: v.valuation.get("exp_return") and v.valuation["exp_return"] * 100, True, lambda x: f"{x:.0f}%"),
+            ("F스코어 /9",  lambda v: v.metrics.fscore,                          True,  lambda x: f"{x:.0f}"),
+        ]
+        cols = ["지표"] + [disp_name(v)[:14] for v in cmp_vs]
+        table = []
+        for label, getter, higher, fmt in specs:
+            vals = [getter(v) for v in cmp_vs]
+            nums = [x for x in vals if isinstance(x, (int, float))]
+            best = (max(nums) if higher else min(nums)) if nums else None
+            row = {"지표": label}
+            for v, x in zip(cmp_vs, vals):
+                cell = fmt(x) if isinstance(x, (int, float)) else "—"
+                if best is not None and isinstance(x, (int, float)) and x == best and len(nums) > 1:
+                    cell = f"⭐ {cell}"
+                row[disp_name(v)[:14]] = cell
+            table.append(row)
+        # 현재가·적정가·등급 행
+        for label, getter in [("현재가", lambda v: money(v.f.price, v.f.currency)),
+                              ("적정가", lambda v: money(v.valuation.get("fair"), v.f.currency)),
+                              ("등급", lambda v: rating_meta(v.rating)[1] + " " + rating_meta(v.rating)[2])]:
+            row = {"지표": label}
+            for v in cmp_vs:
+                row[disp_name(v)[:14]] = getter(v)
+            table.append(row)
+
+        st.dataframe(pd.DataFrame(table), hide_index=True, width="stretch")
+
+        # 4기둥 점수 막대 나란히
+        st.markdown("##### 🏆 버핏 점수 구성 비교")
+        bcols = st.columns(len(cmp_vs))
+        for col, v in zip(bcols, cmp_vs):
+            with col:
+                st.markdown(f"**{disp_name(v)[:14]}** · {v.total:.0f}점")
+                sb = _score_breakdown_html(v.f, v.metrics)
+                if sb:
+                    st.markdown(sb, unsafe_allow_html=True)
 
 st.divider()
 

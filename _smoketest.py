@@ -76,10 +76,16 @@ try:
             if "상세 조언" in str(sb.label) and len(sb.options) > 1:
                 sb.set_value(sb.options[1])
 
+    def compare(at):
+        for ms in at.multiselect:
+            if "비교할 종목" in str(ms.label) and len(ms.options) >= 3:
+                ms.set_value(list(ms.options[:3]))
+
     render("기본 진입(국장)")
     render("미장 전환", to_us)
     render("직접 검색 모드", to_search)
     render("종목 상세 선택", pick)
+    render("종목 비교(3개)", compare)
 except Exception as e:  # noqa: BLE001
     check("AppTest 렌더", False, f"{type(e).__name__}: {e}")
 
