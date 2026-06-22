@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.pytest_cache/
 # 개별 종목 캐시는 커밋하지 않음 — precompute 결과 파일만 커밋
 cache/*
 !cache/results_kr.json

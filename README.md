@@ -71,6 +71,7 @@
 | `results_io.py` | 결과 직렬화/로드 + **데이터 보호 안전장치**(빈 수집이 좋은 데이터 덮어쓰기 방지) |
 | `keep_alive.py` | Streamlit 절전 방지(헤드리스 브라우저로 깨우기) |
 | `_smoketest.py` | CI 스모크 테스트(문법·모듈·데이터·전 경로 렌더) |
+| `tests/` | **단위 테스트(pytest)** — 점수화·ROIC·오너이익·DCF·F-Score·직렬화의 계산 정확성을 잠금 |
 
 ## 🏭 웹 앱 운영 (프로덕션)
 - **즉시 로드**: GitHub Actions가 하루 2회(오전 6시·오후 6시 KST) 전체 종목을 사전 분석해
@@ -78,7 +79,8 @@
 - **데이터 보호**: 수집이 0개거나 직전의 60% 미만이면(야후 rate-limit 사고) **덮어쓰기를 거부**하고
   마지막 정상 데이터를 유지. 30시간 넘게 갱신이 없으면 앱이 신선도 경고를 띄운다.
 - **자동 푸시 견고화**: 결과 커밋 시 충돌하면 rebase 후 최대 5회 재시도, 동시성 잠금, 40분 타임아웃.
-- **CI 게이트**: `main` push마다 `_smoketest.py`가 전 경로를 헤드리스로 렌더해 예외 0건을 확인(`.github/workflows/ci.yml`).
+- **CI 게이트**: `main` push마다 ① `pytest`가 금융 엔진의 계산 정확성(점수·ROIC·DCF·F-Score·직렬화)을 검증하고
+  ② `_smoketest.py`가 전 경로를 헤드리스로 렌더해 예외 0건을 확인한다(`.github/workflows/ci.yml`).
 - **절전 방지**: 6시간마다 `keep_alive.py`가 앱을 깨운다.
 - **시크릿**: DART API 키는 코드에 하드코딩 금지 — 환경변수/Streamlit·GitHub 시크릿으로만 주입.
 
@@ -86,7 +88,13 @@
 ```bash
 pip3 install -r requirements.txt
 streamlit run app.py
-python3 _smoketest.py     # 무결성 테스트
+python3 _smoketest.py     # 전 경로 렌더 무결성 테스트
+```
+
+### 테스트 실행
+```bash
+pip3 install -r requirements-dev.txt
+python3 -m pytest         # 금융 엔진 단위 테스트(점수·ROIC·DCF·F-Score·직렬화)
 ```
 
 ## 실행
