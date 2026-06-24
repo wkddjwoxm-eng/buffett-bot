@@ -11,21 +11,26 @@ on:
 permissions:
   contents: write
 
-# 같은 워크플로우가 겹쳐 돌면 뒤엣것만 살림 (푸시 충돌 예방)
 concurrency:
   group: daily-prefetch
   cancel-in-progress: false
 
 jobs:
-  prefetch:
+  collect:
+    # 국장·미장을 별도 러너(서로 다른 IP)에서 병렬 수집 →
+    # 미장이 국장 수집으로 인한 rate-limit을 물려받지 않아 갱신 성공률↑
+    strategy:
+      fail-fast: false
+      matrix:
+        market: [kr, us]
     runs-on: ubuntu-latest
-    timeout-minutes: 40   # 혹시 멈춰도 40분이면 강제 종료(요금/대기 방지)
+    timeout-minutes: 30
 
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # rebase 푸시를 위해 전체 히스토리
+          fetch-depth: 0
 
       - name: Python 설치
         uses: actions/setup-python@v5
@@ -41,39 +46,46 @@ jobs:
       - name: 캐시 디렉토리 생성
         run: mkdir -p cache
 
-      - name: 전체 종목 사전 분석 (점수·적정가·조언까지 계산)
+      - name: ${{ matrix.market }} 사전 분석 (점수·적정가·조언까지)
         env:
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
-          PRECOMPUTE_TECH: "1"     # 뉴스(기술변곡점)까지 수집. 끄려면 "0"
-          PRECOMPUTE_WORKERS: "8"  # 공유 IP rate-limit 완화 (병렬 낮춤)
-        run: python precompute.py all
+          PRECOMPUTE_TECH: "1"
+          PRECOMPUTE_WORKERS: "10"   # 단일 시장만 받으므로 약간 상향
+        run: python precompute.py ${{ matrix.market }}
 
-      - name: 결과 파일 커밋 & 푸시 (충돌 시 자동 재시도)
+      - name: 환율·금리 수집 (국장 작업에서만)
+        if: matrix.market == 'kr'
+        run: python -c "from precompute import collect_market_indicators; collect_market_indicators()"
+
+      - name: 결과 커밋 & 푸시 (충돌 시 자동 재시도)
         run: |
           set -e
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add -f cache/results_kr.json cache/results_us.json cache/market_indicators.json
+          if [ "${{ matrix.market }}" = "kr" ]; then
+            git add -f cache/results_kr.json cache/market_indicators.json
+          else
+            git add -f cache/results_us.json
+          fi
 
-          # 바뀐 게 없으면 조용히 종료
           if git diff --staged --quiet; then
             echo "변경사항 없음 — 커밋 생략"
             exit 0
           fi
 
-          git commit -m "chore: 일일 전체 분석 자동 수집 $(date +'%Y-%m-%d %H:%M KST+9')"
+          git commit -m "chore: ${{ matrix.market }} 자동 수집 $(date +'%Y-%m-%d %H:%M KST+9')"
 
-          # 원격이 그새 바뀌었어도 rebase 후 재시도(최대 5회)
-          for i in 1 2 3 4 5; do
+          # 두 시장 작업이 동시에 푸시하므로 rebase 후 재시도(최대 6회)
+          for i in 1 2 3 4 5 6; do
             if git push origin HEAD:main; then
               echo "푸시 성공 (시도 $i)"
               exit 0
             fi
-            echo "푸시 실패 — 원격 재동기화 후 재시도 ($i/5)"
+            echo "푸시 실패 — 원격 재동기화 후 재시도 ($i/6)"
             git pull --rebase --autostash origin main || true
-            sleep 5
+            sleep $((RANDOM % 8 + 3))
           done
 
-          echo "::error::5회 시도 후에도 푸시 실패"
+          echo "::error::6회 시도 후에도 푸시 실패"
           exit 1
