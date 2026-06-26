@@ -254,6 +254,14 @@ st.markdown("""
 # ─────────────────────────────────────────────────────────────────────────
 # 헬퍼
 # ─────────────────────────────────────────────────────────────────────────
+@st.cache_resource(ttl=1800, show_spinner="📊 분석 결과 불러오는 중…")
+def _load_market_shared(market: str):
+    """전 사용자 공유 1벌만 메모리에 올림(세션별 복제 방지 → Cloud OOM 예방).
+    읽기 전용 렌더라 공유 안전. 30분 TTL로 새 수집 데이터 자동 반영."""
+    import results_io
+    return results_io.load_market(market)
+
+
 def money(v, currency: str) -> str:
     if v is None:
         return "—"
@@ -831,12 +839,10 @@ def run_analysis(tickers: list[str], use_cache: bool, fetch_tech: bool):
 ready = False
 
 if view == "📊 전체 종목 분석":
-    import results_io
-
-    ck = f"auto_loaded_{auto_market}"
-    if ck not in st.session_state:
-        st.session_state[ck] = results_io.load_market(auto_market)
-    loaded_verdicts, loaded_ts = st.session_state[ck]
+    try:
+        loaded_verdicts, loaded_ts = _load_market_shared(auto_market)
+    except Exception:
+        loaded_verdicts, loaded_ts = None, None
 
     if loaded_verdicts:
         st.session_state["verdicts"] = loaded_verdicts
