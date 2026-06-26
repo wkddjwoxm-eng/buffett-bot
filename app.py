@@ -876,10 +876,38 @@ elif run_btn:
     if not custom_tickers:
         st.warning("회사 이름으로 검색해 종목을 선택한 뒤 ‘분석 시작’을 누르세요.")
         st.stop()
-    st.session_state["verdicts"] = run_analysis(custom_tickers, use_cache, fetch_tech)
+
+    # 사전수집 결과에 이미 있으면 즉시 사용(실시간 fetch 불필요 → Cloud rate-limit 회피).
+    # 유니버스(국장+미장 ~800종목)에 없는 종목만 실시간 조회.
+    pre = {}
+    for _mk in ("kr", "us"):
+        try:
+            _vs, _ = _load_market_shared(_mk)
+        except Exception:
+            _vs = None
+        for _v in (_vs or []):
+            if _v.f.ticker in custom_tickers:
+                pre[_v.f.ticker] = _v
+    missing = [t for t in custom_tickers if t not in pre]
+
+    verdicts_custom = list(pre.values())
+    if missing:
+        with st.spinner(f"{len(missing)}개 종목 실시간 분석 중…"):
+            verdicts_custom += run_analysis(missing, use_cache, fetch_tech)
+    verdicts_custom.sort(key=lambda v: v.total, reverse=True)
+
+    if not verdicts_custom:
+        st.error("종목 데이터를 가져오지 못했습니다. 잠시 후 다시 시도하거나 다른 종목으로 검색해보세요. "
+                 "(실시간 데이터 제공처가 일시적으로 응답하지 않을 수 있습니다)")
+        st.stop()
+    if pre:
+        st.caption(f"⚡ {len(pre)}개는 사전수집 데이터로 즉시 표시"
+                   + (f", {len(missing)}개는 실시간 수집" if missing else "") + ".")
+
+    st.session_state["verdicts"] = verdicts_custom
     st.session_state["sec_map"] = ticker_sector_map()
     st.session_state["name_map"] = ticker_name_map()
-    st.session_state["data_ts"] = "방금 수집 (실시간)"
+    st.session_state["data_ts"] = "사전수집 + 실시간" if pre else "방금 수집 (실시간)"
     st.session_state["result_source"] = "custom"
     ready = True
 
