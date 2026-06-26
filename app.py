@@ -715,21 +715,25 @@ else:
                 key="search_q",
             )
         with col_s2:
+            # 이미 선택된 항목(위젯의 이전 값)을 항상 options에 포함시켜야
+            # '검색어를 바꾸면 default가 options에 없다'는 크래시를 막을 수 있다.
+            prev_sel = st.session_state.get("ms_search", [])
             if search_q:
                 hits = stock_search(search_q, max_results=12)
-                if hits:
+                if hits or prev_sel:
+                    hit_displays = [h["display"] for h in hits]
+                    options = list(dict.fromkeys(hit_displays + prev_sel))  # 검색결과 ∪ 기선택
                     chosen = st.multiselect(
-                        "검색 결과 (선택하면 분석 목록에 추가)",
-                        options=[h["display"] for h in hits],
-                        default=st.session_state.get("chosen_display", []),
-                        key="chosen_display",
+                        "검색 결과 (다른 이름으로 또 검색해 여러 종목을 모을 수 있어요)",
+                        options=options,
+                        key="ms_search",   # key가 값을 관리 — default 미사용(충돌 방지)
                         help="시총 큰 종목이 위에 표시됩니다",
                     )
                 else:
                     st.caption("검색 결과 없음 — 다른 이름으로 시도해보세요.")
-                    chosen = st.session_state.get("chosen_display", [])
+                    chosen = prev_sel
             else:
-                chosen = st.session_state.get("chosen_display", [])
+                chosen = prev_sel
 
         for d in (chosen or []):
             mm = re.search(r'\(([^)]+)\)$', d)

@@ -86,6 +86,26 @@ try:
     render("직접 검색 모드", to_search)
     render("종목 상세 선택", pick)
     render("종목 비교(3개)", compare)
+
+    # 회귀: 검색→선택→다른 검색어 변경 시 multiselect default 크래시 방지
+    def search_change(at):
+        for r in at.radio:
+            if any("검색" in str(o) for o in r.options):
+                r.set_value("🔎 직접 종목 검색")
+        at.run()
+        for ti in at.text_input:
+            if "회사 이름" in str(ti.label):
+                ti.set_value("기아")
+        at.run()
+        for ms in at.multiselect:
+            if "여러 종목" in str(ms.label) and ms.options:
+                ms.set_value([ms.options[0]])
+        at.run()
+        for ti in at.text_input:
+            if "회사 이름" in str(ti.label):
+                ti.set_value("삼성")   # 기아가 새 검색결과에 없음 → 과거 크래시 지점
+
+    render("검색어 변경(기아→삼성)", search_change)
 except Exception as e:  # noqa: BLE001
     check("AppTest 렌더", False, f"{type(e).__name__}: {e}")
 
