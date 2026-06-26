@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pandas as pd
 import streamlit as st
+import advisor   # 상세 렌더가 어느 경로에서든 쓰므로 최상단에서 임포트
 
 # ─────────────────────────────────────────────────────────────────────────
 # 페이지 설정
@@ -260,6 +261,29 @@ def _load_market_shared(market: str):
     읽기 전용 렌더라 공유 안전. 30분 TTL로 새 수집 데이터 자동 반영."""
     import results_io
     return results_io.load_market(market)
+
+
+def _resolve_one(ticker: str):
+    """티커 1개 → (Verdict, 같은시장 peers). 사전수집 우선, 없으면 실시간.
+    Cloud rate-limit 시에도 유니버스 종목은 사전수집으로 즉시 해결."""
+    for mk in ("kr", "us"):
+        try:
+            vs, _ = _load_market_shared(mk)
+        except Exception:
+            vs = None
+        for v in (vs or []):
+            if v.f.ticker == ticker:
+                return v, list(vs)
+    # 유니버스 밖 — 실시간 조회
+    try:
+        from datafetch import fetch
+        from buffett import evaluate
+        f = fetch(ticker, use_cache=True)
+        if f:
+            return evaluate(f, fetch_tech=True), []
+    except Exception:
+        pass
+    return None, []
 
 
 def money(v, currency: str) -> str:
@@ -675,6 +699,7 @@ import re
 # 기본값 (아래 모드별로 덮어씀)
 run_btn = watch_btn = check_btn = False
 custom_tickers: list[str] = []
+search_pick_ticker = None
 top_n = 8
 use_cache = True
 fetch_tech = True
@@ -704,55 +729,32 @@ if view == "📊 전체 종목 분석":
     st.caption("⚡ 매일 **오전 6시·오후 6시**에 자동 수집된 결과를 바로 보여줍니다. "
                "버튼을 누를 필요 없이, 마켓만 고르면 됩니다.")
 else:
-    with st.expander("⚙️ 검색 / 분석 설정", expanded=True):
-        from search_db import search as stock_search
+    from search_db import search as stock_search
 
-        col_s1, col_s2 = st.columns([1, 2])
-        with col_s1:
-            search_q = st.text_input(
-                "🔎 회사 이름으로 검색",
-                placeholder="예: 삼성, 애플, 현대, Tesla...",
-                key="search_q",
+    sc1, sc2 = st.columns([3, 1])
+    with sc1:
+        search_q = st.text_input(
+            "🔎 회사 이름·티커로 검색 — 고르면 바로 상세분석이 열립니다",
+            placeholder="예: 삼성, 기아, 애플, Tesla, AAPL, 005930…",
+            key="search_q",
+        )
+    with sc2:
+        check_btn = st.button("🔔 워치리스트 점검", width="stretch")
+
+    if search_q:
+        hits = stock_search(search_q, max_results=20)
+        if hits:
+            picked = st.selectbox(
+                "종목 선택 (선택 즉시 상세분석)",
+                options=[h["display"] for h in hits],
+                index=0,
+                key="search_pick_box",
             )
-        with col_s2:
-            # 이미 선택된 항목(위젯의 이전 값)을 항상 options에 포함시켜야
-            # '검색어를 바꾸면 default가 options에 없다'는 크래시를 막을 수 있다.
-            prev_sel = st.session_state.get("ms_search", [])
-            if search_q:
-                hits = stock_search(search_q, max_results=12)
-                if hits or prev_sel:
-                    hit_displays = [h["display"] for h in hits]
-                    options = list(dict.fromkeys(hit_displays + prev_sel))  # 검색결과 ∪ 기선택
-                    chosen = st.multiselect(
-                        "검색 결과 (다른 이름으로 또 검색해 여러 종목을 모을 수 있어요)",
-                        options=options,
-                        key="ms_search",   # key가 값을 관리 — default 미사용(충돌 방지)
-                        help="시총 큰 종목이 위에 표시됩니다",
-                    )
-                else:
-                    st.caption("검색 결과 없음 — 다른 이름으로 시도해보세요.")
-                    chosen = prev_sel
-            else:
-                chosen = prev_sel
-
-        for d in (chosen or []):
-            mm = re.search(r'\(([^)]+)\)$', d)
+            mm = re.search(r'\(([^)]+)\)$', picked or "")
             if mm:
-                custom_tickers.append(mm.group(1))
-        if custom_tickers:
-            st.caption(f"분석 목록: **{', '.join(custom_tickers)}**")
-
-        col_opt1, col_opt2, col_opt3 = st.columns([2, 1, 1])
-        with col_opt1:
-            top_n = st.slider("상세 조언 상위 종목 수", 3, 20, 8)
-        with col_opt2:
-            use_cache = st.toggle("당일 캐시 사용", value=True)
-            fetch_tech = st.toggle("기술변곡점 뉴스", value=True)
-        with col_opt3:
-            run_btn = st.button("🔍 분석 시작", type="primary", width="stretch")
-            c1, c2 = st.columns(2)
-            watch_btn = c1.button("💾 저장", width="stretch")
-            check_btn = c2.button("🔔 점검", width="stretch")
+                search_pick_ticker = mm.group(1)
+        else:
+            st.caption("검색 결과 없음 — 다른 이름이나 티커로 시도해보세요.")
 
 st.caption("⚠️ 교육·연구용 참고 도구. 투자 책임은 본인에게 있습니다.")
 
@@ -784,6 +786,42 @@ if check_btn:
                 else:
                     drop = (1 - w["target"] / f.price) * 100
                     st.info(f"· {w['name']} ({tk}): 현재 {price} (목표 {target}까지 −{drop:.0f}% 더 하락 필요)")
+    st.stop()
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 직접 종목 검색: 고른 종목을 즉시 상세분석 (대시보드 대신 상세 바로 표시)
+# ─────────────────────────────────────────────────────────────────────────
+if view == "🔎 직접 종목 검색":
+    if not search_pick_ticker:
+        st.markdown("""
+        <div class="hero">
+          <h1>🔎 개별 종목 검색</h1>
+          <p>위에서 회사 이름이나 티커를 검색하고 종목을 고르면<br>
+          <b>바로 그 종목의 상세분석</b>(점수·적정가·매수가·이유·위험·동종업계 비교)이 열립니다.</p>
+          <span class="tag">국장·미장 어떤 종목이든 검색 가능</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.info('💡 *"훌륭한 기업을 적당한 가격에 사라. 그저 그런 기업을 헐값에 사는 것보다 낫다."* — 워런 버핏')
+        st.stop()
+
+    with st.spinner("분석 중…"):
+        _v, _peers = _resolve_one(search_pick_ticker)
+    if not _v:
+        st.error("종목 데이터를 가져오지 못했습니다. 잠시 후 다시 시도하거나 다른 종목으로 검색해보세요. "
+                 "(실시간 데이터 제공처가 일시적으로 응답하지 않을 수 있습니다)")
+        st.stop()
+
+    _nmap = ticker_name_map()
+    _nm = _nmap.get(_v.f.ticker) or _v.f.name
+    _cls, _emoji, _short = rating_meta(_v.rating)
+    st.session_state["verdicts"] = _peers or [_v]   # 동종업계 비교용
+    st.session_state["sec_map"] = ticker_sector_map()
+    st.session_state["name_map"] = _nmap
+    st.session_state["result_source"] = "custom"
+    st.markdown(f"## {_emoji} {_nm} ({_v.f.ticker}) · {_short} · {_v.total:.0f}점")
+    st.markdown(badge_html(_v.rating), unsafe_allow_html=True)
+    _render_detail(_v, show_memo=True)
     st.stop()
 
 
@@ -955,7 +993,6 @@ if not ready:
 # ─────────────────────────────────────────────────────────────────────────
 # 결과 렌더링
 # ─────────────────────────────────────────────────────────────────────────
-import advisor
 
 verdicts = st.session_state["verdicts"]
 sec_map = st.session_state["sec_map"]
