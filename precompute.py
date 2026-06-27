@@ -30,8 +30,13 @@ def collect_market_indicators() -> dict:
     try:
         import yfinance as yf
         def _px(ticker):
+            # 주말·장마감엔 lastPrice가 비기도 해 → 직전 종가(금요일 종가)로 폴백
             tk = yf.Ticker(ticker)
-            v = tk.fast_info.get("lastPrice") or tk.info.get("regularMarketPrice")
+            fi = tk.fast_info
+            v = (fi.get("lastPrice") or fi.get("previousClose")
+                 or fi.get("regularMarketPreviousClose"))
+            if v is None:
+                v = tk.info.get("regularMarketPrice") or tk.info.get("previousClose")
             return float(v) if v else None
         usd = _px("USDKRW=X")
         jpy = _px("JPYKRW=X")
@@ -41,10 +46,21 @@ def collect_market_indicators() -> dict:
         if irx: result["us_rate"] = f"{irx:.2f}%"
     except Exception as e:
         print(f"  [indicators] 수집 실패: {e}")
+
+    # 안전장치: 이번에 못 받은 항목은 기존 값(직전 정상치)을 유지 — null 덮어쓰기 방지
+    _path = _CACHE_DIR / "market_indicators.json"
+    prev = {}
+    if _path.exists():
+        try:
+            prev = json.loads(_path.read_text(encoding="utf-8"))
+        except Exception:
+            prev = {}
+    for k in ("usd_krw", "jpy_krw_100", "us_rate"):
+        if not result.get(k) and prev.get(k):
+            result[k] = prev[k]   # 직전 값 보존
+
     _CACHE_DIR.mkdir(exist_ok=True)
-    (_CACHE_DIR / "market_indicators.json").write_text(
-        json.dumps(result, ensure_ascii=False), encoding="utf-8"
-    )
+    _path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     print(f"  [indicators] USD={result['usd_krw']} JPY100={result['jpy_krw_100']} US={result['us_rate']}")
     return result
 
