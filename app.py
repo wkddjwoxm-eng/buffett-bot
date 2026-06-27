@@ -517,7 +517,7 @@ def _render_detail(v, show_memo: bool = False):
         # ── 섹터 배경 설명 ──
         ctx = _sector_context(v)
         if ctx:
-            st.markdown(f"#### 🌐 섹터 배경")
+            st.markdown("#### 🌐 섹터 배경")
             st.info(ctx)
 
         # ── 왜 매수/주의인가 — 지표 해석 ──
@@ -697,12 +697,9 @@ def ticker_name_map() -> dict:
 import re
 
 # 기본값 (아래 모드별로 덮어씀)
-run_btn = watch_btn = check_btn = False
-custom_tickers: list[str] = []
+check_btn = False
 search_pick_ticker = None
 top_n = 8
-use_cache = True
-fetch_tech = True
 auto_market = "kr"
 
 view = st.radio(
@@ -841,7 +838,6 @@ def run_analysis(tickers: list[str], use_cache: bool, fetch_tech: bool):
     bar = st.progress(0.0, text=f"병렬 데이터 수집 중… (0/{total})")
     status = st.empty()
 
-    funds = []
     done_count = 0
     lock_funds = []
 
@@ -914,79 +910,8 @@ if view == "📊 전체 종목 분석":
             st.rerun()
         st.stop()
 
-elif run_btn:
-    if not custom_tickers:
-        st.warning("회사 이름으로 검색해 종목을 선택한 뒤 ‘분석 시작’을 누르세요.")
-        st.stop()
-
-    # 사전수집 결과에 이미 있으면 즉시 사용(실시간 fetch 불필요 → Cloud rate-limit 회피).
-    # 유니버스(국장+미장 ~800종목)에 없는 종목만 실시간 조회.
-    pre = {}
-    for _mk in ("kr", "us"):
-        try:
-            _vs, _ = _load_market_shared(_mk)
-        except Exception:
-            _vs = None
-        for _v in (_vs or []):
-            if _v.f.ticker in custom_tickers:
-                pre[_v.f.ticker] = _v
-    missing = [t for t in custom_tickers if t not in pre]
-
-    verdicts_custom = list(pre.values())
-    if missing:
-        with st.spinner(f"{len(missing)}개 종목 실시간 분석 중…"):
-            verdicts_custom += run_analysis(missing, use_cache, fetch_tech)
-    verdicts_custom.sort(key=lambda v: v.total, reverse=True)
-
-    if not verdicts_custom:
-        st.error("종목 데이터를 가져오지 못했습니다. 잠시 후 다시 시도하거나 다른 종목으로 검색해보세요. "
-                 "(실시간 데이터 제공처가 일시적으로 응답하지 않을 수 있습니다)")
-        st.stop()
-    if pre:
-        st.caption(f"⚡ {len(pre)}개는 사전수집 데이터로 즉시 표시"
-                   + (f", {len(missing)}개는 실시간 수집" if missing else "") + ".")
-
-    st.session_state["verdicts"] = verdicts_custom
-    st.session_state["sec_map"] = ticker_sector_map()
-    st.session_state["name_map"] = ticker_name_map()
-    st.session_state["data_ts"] = "사전수집 + 실시간" if pre else "방금 수집 (실시간)"
-    st.session_state["result_source"] = "custom"
-    ready = True
-
-elif st.session_state.get("result_source") == "custom" and st.session_state.get("verdicts"):
-    # 직접 검색 결과를 이미 본 상태 — 재실행 시 유지
-    ready = True
-
-
-# ─────────────────────────────────────────────────────────────────────────
-# 직접 검색 모드: 아직 분석 전이면 안내 후 정지
-# ─────────────────────────────────────────────────────────────────────────
+# (직접 종목 검색 모드는 위에서 이미 처리·정지함 — 여기는 전체 분석 모드 전용)
 if not ready:
-    st.markdown("""
-    <div class="hero">
-      <h1>🔎 직접 종목 검색</h1>
-      <p>회사 이름을 검색해 종목을 고르고 <b>‘🔍 분석 시작’</b>을 누르면<br>
-      버핏 잣대로 채점하고 적정 매수가·이유·위험을 조언합니다.</p>
-      <span class="tag">전체 종목을 보려면 위에서 <b>📊 전체 종목 분석</b>을 선택하세요</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    cols = st.columns(3)
-    cards = [
-        ("🏆", "버핏 100점 채점", "수익성·해자 30 / 재무안정 25 / 성장 20 / 밸류 25 + 기술신호 ±3"),
-        ("💰", "입체 적정가", "시나리오 DCF·역DCF·안전마진·기대 연수익률로 ‘살 가격’ 제시"),
-        ("📡", "기술변곡점 탐지", "최신 뉴스에서 HBM·AI·수주 등 모멘텀 신호를 점수에 반영"),
-    ]
-    for i, (ico, t, d) in enumerate(cards):
-        with cols[i % 3]:
-            st.markdown(f"""
-            <div class="pick-card" style="margin-bottom:14px;">
-              <div style="font-size:1.6rem">{ico}</div>
-              <div style="font-weight:800;font-size:1.05rem;margin:6px 0 4px">{t}</div>
-              <div style="color:#8b95a5;font-size:.85rem;line-height:1.5">{d}</div>
-            </div>""", unsafe_allow_html=True)
-
-    st.info('💡 *"훌륭한 기업을 적당한 가격에 사라. 그저 그런 기업을 헐값에 사는 것보다 낫다."* — 워런 버핏')
     st.stop()
 
 
@@ -1081,11 +1006,9 @@ temp = (f"<span style='color:{fg_color};font-size:1.9rem;font-weight:800'>{fg_em
         f"<br><span style='font-size:.7rem;color:#8b95a5'>{fg_hint}</span>"
         f"<br><span style='font-size:.65rem;color:#6b7280'>{_source_hint}</span>")
 
-from pathlib import Path as _Path
 from datafetch import CACHE_DIR as _CACHE_DIR, CACHE_VERSION as _CV
 
 def _data_timestamp() -> str:
-    import os
     files = list(_CACHE_DIR.glob(f"*_{_CV}_*.json"))
     if not files:
         from datetime import datetime
@@ -1197,7 +1120,7 @@ elif waits:
     st.warning(f"##### 🟡 오늘의 결론 — 지금 {_mkt_kor}은 **살 만한 가격이 아님**. "
                f"우량주 **{len(waits)}개**가 '목표가 대기' 중 — 더 빠지면 기회. (버핏: 기다림도 전략)")
 else:
-    st.error(f"##### 🔴 오늘의 결론 — 기준을 통과하는 매수·대기 후보가 없음. 현금 보유 우위.")
+    st.error("##### 🔴 오늘의 결론 — 기준을 통과하는 매수·대기 후보가 없음. 현금 보유 우위.")
 
 # ── 스포트라이트: 강력매수 또는 톱픽 ──────────────────────────────────────
 spotlight = strong if strong else buys
@@ -1504,7 +1427,7 @@ with tab3:
             "남이 탐욕스러울 때 두려워하고, 두려워할 때 욕심내라.")
 
     st.divider()
-    if watch_btn or st.button("💾 '대기' 종목 목표가 워치리스트 저장", width="stretch"):
+    if st.button("💾 '대기' 종목 목표가 워치리스트 저장", width="stretch"):
         cnt = _wl_add_from_verdicts(verdicts)
         st.success(f"✅ '대기' 종목 {cnt}개를 워치리스트에 저장했습니다 (이 브라우저 세션 기준). "
                    f"직접 검색 모드의 '🔔 점검'으로 목표가 도달을 확인하세요.")
