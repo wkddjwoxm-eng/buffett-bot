@@ -502,6 +502,15 @@ def _peer_context_lines(v) -> list[str]:
 
 
 def _render_detail(v, show_memo: bool = False):
+    """상세 렌더 안전망 — 예외가 나도 페이지 전체를 죽이지 않고 안내만 표시."""
+    try:
+        _render_detail_body(v, show_memo)
+    except Exception:
+        st.warning("이 종목의 상세 정보를 표시하는 중 일시적 문제가 발생했어요. "
+                   "새로고침하거나 다른 종목을 시도해보세요.")
+
+
+def _render_detail_body(v, show_memo: bool = False):
     """종목 상세 조언 블록 (스포트라이트 카드 클릭 + Tab4에서 공용).
 
     show_memo=True 는 '종목 선택' 경로(한 번에 1개만 렌더)에서만 켠다.
