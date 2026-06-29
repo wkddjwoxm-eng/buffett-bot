@@ -159,9 +159,16 @@ def load_market(market: str) -> tuple[Optional[list], Optional[str]]:
         return None, None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-        verdicts = [_verdict_from_dict(d) for d in payload.get("verdicts", [])]
-        # 점수 내림차순 정렬 보장
-        verdicts.sort(key=lambda v: v.total, reverse=True)
-        return verdicts, payload.get("generated_at")
     except Exception:
         return None, None
+    # 레코드 단위로 복원 — 한 종목이 깨져도 나머지는 살린다(시장 전체 블랙아웃 방지)
+    verdicts = []
+    for d in payload.get("verdicts", []):
+        try:
+            verdicts.append(_verdict_from_dict(d))
+        except Exception:
+            continue
+    if not verdicts:
+        return None, None
+    verdicts.sort(key=lambda v: v.total, reverse=True)
+    return verdicts, payload.get("generated_at")
