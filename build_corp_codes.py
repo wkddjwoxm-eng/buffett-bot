@@ -8,11 +8,16 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-DART_API_KEY = "db0ad745fc380f0e7a97a340ac6f148faf34ddf4"
+# 보안: 키는 절대 하드코딩 금지 — 환경변수에서만 읽는다.
+#   실행:  DART_API_KEY=발급키  python3 build_corp_codes.py
+DART_API_KEY = os.environ.get("DART_API_KEY", "")
 
 
 def download_corp_codes() -> dict:
     """stock_code(6자리) → corp_code(8자리) 매핑 반환."""
+    if not DART_API_KEY:
+        raise SystemExit("환경변수 DART_API_KEY가 필요합니다. "
+                         "예) DART_API_KEY=발급키 python3 build_corp_codes.py")
     url = f"https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key={DART_API_KEY}"
     r = requests.get(url, timeout=30)
     z = zipfile.ZipFile(io.BytesIO(r.content))
