@@ -1136,6 +1136,31 @@ elif waits:
 else:
     st.error("##### 🔴 오늘의 결론 — 기준을 통과하는 매수·대기 후보가 없음. 현금 보유 우위.")
 
+# ── 추천 성과 자기검증 (과거 강력매수가 실제로 냈던 수익률) ────────────────
+if _rs_now in ("auto:kr", "auto:us"):
+    try:
+        import json as _json
+        from pathlib import Path as _P
+        _tr = _json.loads((_P(__file__).parent / "cache" / "track_record.json")
+                          .read_text(encoding="utf-8"))
+        _tw = (_tr.get("markets") or {}).get(_rs_now.split(":")[1]) or {}
+        _parts = []
+        for _d in ("7", "14", "30"):
+            w = _tw.get(_d)
+            if not w:
+                continue
+            _alpha = (w["avg"] - w["mkt_avg"]) if w.get("mkt_avg") is not None else None
+            _parts.append(
+                f"**{_d}일 전 추천 {w['n']}종목** 평균 **{w['avg']:+.1f}%**"
+                + (f" (시장 {w['mkt_avg']:+.1f}%, 초과 {_alpha:+.1f}%p)" if _alpha is not None else "")
+                + f" · 승률 {w['win_rate']:.0f}%"
+            )
+        if _parts:
+            st.markdown("###### 📈 자기검증 — 과거 '강력 매수' 추천의 실제 성과")
+            st.caption("  |  ".join(_parts) + "  ·  *매 수집마다 git 이력으로 자동 계산 — 과거 성과가 미래를 보장하진 않습니다*")
+    except Exception:
+        pass
+
 # ── 스포트라이트: 강력매수 또는 톱픽 ──────────────────────────────────────
 spotlight = strong if strong else buys
 title = "🚀 강력 매수 후보" if strong else "✅ 지금 사도 좋은 후보 (Top 3)"

@@ -57,6 +57,10 @@ jobs:
         if: matrix.market == 'kr'
         run: python -c "from precompute import collect_market_indicators; collect_market_indicators()"
 
+      - name: 추천 성과 자기검증 계산 (국장 작업에서만, git 이력 기반)
+        if: matrix.market == 'kr'
+        run: python track_record.py || echo "track record 계산 실패 — 무시(다음 수집에서 재시도)"
+
       - name: 결과 커밋 & 푸시 (충돌 시 자동 재시도)
         run: |
           set -e
@@ -64,7 +68,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           if [ "${{ matrix.market }}" = "kr" ]; then
-            git add -f cache/results_kr.json cache/market_indicators.json
+            git add -f cache/results_kr.json cache/market_indicators.json cache/track_record.json
           else
             git add -f cache/results_us.json
           fi
