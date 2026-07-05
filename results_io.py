@@ -70,15 +70,20 @@ def _existing_count(path: Path) -> int:
         return 0
 
 
+CARRY_MAX_AGE_SEC = 7 * 86400   # 이월 데이터 최대 보존: 7일 (상장폐지 종목 자연 소멸)
+
+
 def dump_market(verdicts: list[Verdict], market: str,
-                generated_at: Optional[str] = None,
-                min_keep_ratio: float = 0.6) -> Path:
+                generated_at: Optional[str] = None) -> Path:
     """결과를 cache/results_{market}.json 으로 저장.
 
-    안전장치: 이번 수집이 비정상적으로 적으면(0개거나 기존의 60% 미만)
-    기존 좋은 데이터를 덮어쓰지 않는다. (GitHub Actions IP가 야후에
-    rate-limit 당해 빈 결과가 나오는 사고로부터 데이터를 보호)
+    이월(carry-over): 이번 수집에서 빠진 종목은 직전 파일의 데이터를
+    그대로 유지한다(최대 7일). rate-limit으로 매번 뒷순서 섹터가 통째로
+    빠지는 문제를 해소하고, 커버리지가 유니버스 전체로 수렴하게 한다.
+    가치투자 지표(펀더멘털)는 며칠 사이 변하지 않으므로 안전.
+    0개 수집이면 파일을 건드리지 않는다.
     """
+    import time as _time
     path = CACHE_DIR / f"results_{market}.json"
     new_n = len(verdicts)
     old_n = _existing_count(path)
@@ -86,21 +91,41 @@ def dump_market(verdicts: list[Verdict], market: str,
     if new_n == 0:
         print(f"  ⛔ [{market}] 수집 0개 — 기존 {old_n}개 데이터 보존(덮어쓰기 취소)")
         return path
-    if old_n > 0 and new_n < old_n * min_keep_ratio:
-        print(f"  ⛔ [{market}] 수집 {new_n}개 < 기존 {old_n}개의 {int(min_keep_ratio*100)}% "
-              f"— rate-limit 의심, 기존 데이터 보존(덮어쓰기 취소)")
-        return path
 
-    import time as _time
+    now = _time.time()
+    new_dicts = [_verdict_to_dict(v) for v in verdicts]
+    fresh_tickers = {d.get("f", {}).get("ticker") for d in new_dicts}
+
+    # 직전 파일에서 이번에 빠진 종목 이월 (7일 초과분은 폐기)
+    carried = []
+    if path.exists():
+        try:
+            old = json.loads(path.read_text(encoding="utf-8"))
+            old_epoch = old.get("generated_epoch") or now
+            for d in old.get("verdicts", []):
+                tk = d.get("f", {}).get("ticker")
+                if not tk or tk in fresh_tickers:
+                    continue
+                stale_since = d.get("_stale_epoch") or old_epoch
+                if now - stale_since <= CARRY_MAX_AGE_SEC:
+                    d["_stale_epoch"] = stale_since
+                    carried.append(d)
+        except Exception:
+            pass
+
+    all_dicts = new_dicts + carried
+    all_dicts.sort(key=lambda d: d.get("total") or 0, reverse=True)
+
     payload = {
         "market": market,
         "generated_at": generated_at or _now_kst_str(),
-        "generated_epoch": _time.time(),   # 신선도 계산용(기계 판독)
-        "count": new_n,
-        "verdicts": [_verdict_to_dict(v) for v in verdicts],
+        "generated_epoch": now,
+        "count": len(all_dicts),
+        "fresh_count": new_n,
+        "verdicts": all_dicts,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    print(f"  ✅ [{market}] {new_n}개 저장 (기존 {old_n}개)")
+    print(f"  ✅ [{market}] {len(all_dicts)}개 저장 (신규 {new_n} + 이월 {len(carried)}, 기존 {old_n})")
     return path
 
 

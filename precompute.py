@@ -73,7 +73,11 @@ _KST = timezone(timedelta(hours=9))
 
 
 def precompute_market(market: str, workers: int = DEFAULT_WORKERS) -> int:
+    import random
     tickers = [tk for tk, _, _ in get_universe(market)]
+    # 셔플 — 항상 같은 순서면 rate-limit 때 뒷순서 섹터가 매번 통째로 굶는다.
+    # 매 실행 다른 종목이 성공하고, 빠진 종목은 dump_market이 직전 데이터로 이월.
+    random.shuffle(tickers)
     total = len(tickers)
     print(f"[precompute] {market.upper()} — {total}개 종목 분석 시작 "
           f"(workers={workers}, tech={FETCH_TECH})")
